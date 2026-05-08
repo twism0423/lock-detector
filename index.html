@@ -22,13 +22,11 @@
 </head>
 <body>
   <h1>LOCK DETECTOR</h1>
-  
   <div class="card">
-    <div style="font-size: 0.6rem; color: #4a4a70;">INPUT LEVEL / WAVEFORM</div>
+    <div style="font-size: 0.6rem; color: #4a4a70;">INPUT LEVEL</div>
     <div id="peakVal" class="val-box">0.0000</div>
     <canvas id="waveCanvas"></canvas>
   </div>
-
   <div class="card">
     <div style="font-size: 0.6rem; color: #4a4a70;">AI CLASSIFICATION</div>
     <div class="res-row">
@@ -44,7 +42,6 @@
       <div class="bar-bg"><div id="bar-noise" class="bar-fill" style="background:#ff3366;"></div></div>
     </div>
   </div>
-
   <button id="mainBtn" class="btn" onclick="toggle()" disabled>INITIALIZING...</button>
 
 <script>
@@ -58,7 +55,7 @@ window.onload = async () => {
         isReady = true;
         document.getElementById('mainBtn').disabled = false;
         document.getElementById('mainBtn').innerText = 'START';
-    } catch (e) { alert("Engine Error: " + e.message); }
+    } catch (e) { alert("Error: " + e.message); }
 };
 
 async function toggle() {
@@ -80,42 +77,42 @@ async function start() {
         const source = audioCtx.createMediaStreamSource(stream);
         analyser = audioCtx.createAnalyser();
         processor = audioCtx.createScriptProcessor(4096, 1, 1);
-        
-        source.connect(analyser);
-        processor.connect(audioCtx.destination);
-        source.connect(processor);
+        source.connect(analyser); processor.connect(audioCtx.destination); source.connect(processor);
 
         processor.onaudioprocess = (e) => {
             const input = e.inputBuffer.getChannelData(0);
             let peak = 0;
             for (let i = 0; i < input.length; i++) {
-                // ここが重要：音声を16ビット相当（32768倍）にスケールアップしてAIに渡す
-                sampleBuf.push(input[i] * 32768);
+                sampleBuf.push(input[i]);
                 if (Math.abs(input[i]) > peak) peak = Math.abs(input[i]);
             }
             document.getElementById('peakVal').innerText = peak.toFixed(4);
 
             if (sampleBuf.length >= 16000) {
                 const raw = sampleBuf.slice(-16000);
-                sampleBuf.splice(0, 4000); 
-
-                // 推論実行
-                const res = classifier.classify(new Float32Array(raw));
+                sampleBuf.splice(0, 4000);
                 
-                const results = res.results || res.classification;
-                if (results) {
-                    results.forEach(r => {
-                        const label = r.label.toLowerCase();
-                        const val = (r.value * 100).toFixed(1);
-                        if (label.includes('lock')) {
-                            document.getElementById('bar-lock').style.width = val + '%';
-                            document.getElementById('txt-lock').innerText = val + '%';
-                        } else if (label.includes('noise')) {
-                            document.getElementById('bar-noise').style.width = val + '%';
-                            document.getElementById('txt-noise').innerText = val + '%';
-                        }
-                    });
-                }
+                // 【最終対策】データのスケールを自動調整してAIに渡す
+                // 16ビットのレンジ(-32768~32767)へ引き上げる
+                const inferenceData = Array.from(raw).map(v => v * 32768);
+                
+                try {
+                    const res = classifier.classify(inferenceData);
+                    const results = res.results || res.classification;
+                    if (results) {
+                        results.forEach(r => {
+                            const label = r.label.toLowerCase();
+                            const val = (r.value * 100).toFixed(1) + '%';
+                            if (label.includes('lock')) {
+                                document.getElementById('bar-lock').style.width = val;
+                                document.getElementById('txt-lock').innerText = val;
+                            } else if (label.includes('noise')) {
+                                document.getElementById('bar-noise').style.width = val;
+                                document.getElementById('txt-noise').innerText = val;
+                            }
+                        });
+                    }
+                } catch (err) { console.error(err); }
             }
         };
         isRecording = true;
@@ -133,11 +130,10 @@ function draw() {
     const data = new Float32Array(analyser.fftSize);
     analyser.getFloatTimeDomainData(data);
     ctx.fillStyle = '#0f0f1f'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.strokeStyle = '#00ffaa'; ctx.lineWidth = 1.5; ctx.beginPath();
+    ctx.strokeStyle = '#00ffaa'; ctx.lineWidth = 1; ctx.beginPath();
     const step = canvas.width / data.length;
     for (let i = 0; i < data.length; i++) {
-        const x = i * step;
-        const y = (data[i] + 1) / 2 * canvas.height;
+        const x = i * step; const y = (data[i] + 1) / 2 * canvas.height;
         i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     }
     ctx.stroke();
