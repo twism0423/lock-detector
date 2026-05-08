@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>LOCK DETECTOR</title>
+  <title>LOCK DETECTOR FINAL</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap');
     body { background: #05050a; color: #d0d0e8; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; }
@@ -24,13 +24,13 @@
   <h1>LOCK DETECTOR</h1>
   
   <div class="card">
-    <div style="font-size: 0.6rem; color: #505080;">INPUT PEAK / WAVEFORM</div>
+    <div style="font-size: 0.6rem; color: #4a4a70;">INPUT LEVEL / WAVEFORM</div>
     <div id="peakVal" class="val-box">0.0000</div>
     <canvas id="waveCanvas"></canvas>
   </div>
 
   <div class="card">
-    <div style="font-size: 0.6rem; color: #505080;">AI CLASSIFICATION</div>
+    <div style="font-size: 0.6rem; color: #4a4a70;">AI CLASSIFICATION</div>
     <div class="res-row">
       <div style="display:flex; justify-content:space-between; font-family:'Orbitron'; font-size:0.8rem;">
         <span>LOCK</span><span id="txt-lock">0.0%</span>
@@ -89,7 +89,8 @@ async function start() {
             const input = e.inputBuffer.getChannelData(0);
             let peak = 0;
             for (let i = 0; i < input.length; i++) {
-                sampleBuf.push(input[i]);
+                // ここが重要：音声を16ビット相当（32768倍）にスケールアップしてAIに渡す
+                sampleBuf.push(input[i] * 32768);
                 if (Math.abs(input[i]) > peak) peak = Math.abs(input[i]);
             }
             document.getElementById('peakVal').innerText = peak.toFixed(4);
@@ -98,26 +99,20 @@ async function start() {
                 const raw = sampleBuf.slice(-16000);
                 sampleBuf.splice(0, 4000); 
 
-                // AI推論
+                // 推論実行
                 const res = classifier.classify(new Float32Array(raw));
                 
-                // 結果の取り出し (Edge Impulseのバージョンによる名称の違いを両方カバー)
                 const results = res.results || res.classification;
-                
                 if (results) {
-                    Object.keys(results).forEach(key => {
-                        const r = results[key];
-                        // r が {label: "lock", value: 0.9} のようなオブジェクトの場合
-                        const label = (r.label || key).toLowerCase();
-                        const val = (r.value || r); 
-                        const pct = (val * 100).toFixed(1) + '%';
-
+                    results.forEach(r => {
+                        const label = r.label.toLowerCase();
+                        const val = (r.value * 100).toFixed(1);
                         if (label.includes('lock')) {
-                            document.getElementById('bar-lock').style.width = pct;
-                            document.getElementById('txt-lock').innerText = pct;
+                            document.getElementById('bar-lock').style.width = val + '%';
+                            document.getElementById('txt-lock').innerText = val + '%';
                         } else if (label.includes('noise')) {
-                            document.getElementById('bar-noise').style.width = pct;
-                            document.getElementById('txt-noise').innerText = pct;
+                            document.getElementById('bar-noise').style.width = val + '%';
+                            document.getElementById('txt-noise').innerText = val + '%';
                         }
                     });
                 }
