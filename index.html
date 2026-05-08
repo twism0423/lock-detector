@@ -7,16 +7,18 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
         :root { --bg: #05050a; --accent: #00ffaa; --warn: #ff3366; --panel: #0f0f1f; --text: #d0d0e8; }
-        body { background: var(--bg); color: var(--text); font-family: sans-serif; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 20px; }
+        body { background: var(--bg); color: var(--text); font-family: sans-serif; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 20px; margin: 0; }
         .container { width: 100%; max-width: 400px; }
-        h1 { font-family: 'Orbitron', sans-serif; font-size: 1.2rem; color: var(--accent); text-align: center; margin-bottom: 20px; letter-spacing: 3px; }
+        h1 { font-family: 'Orbitron', sans-serif; font-size: 1.1rem; color: var(--accent); text-align: center; margin-bottom: 20px; letter-spacing: 3px; }
         .monitor { background: var(--panel); border: 1px solid #1a1a30; border-radius: 12px; padding: 15px; margin-bottom: 15px; }
-        .val { font-family: 'Orbitron', monospace; font-size: 1.1rem; color: #fff; }
-        canvas { width: 100%; height: 60px; background: #000; border-radius: 6px; margin-top: 10px; }
-        .res-row { background: var(--panel); padding: 12px; border-radius: 8px; margin-bottom: 10px; position: relative; overflow: hidden; border: 1px solid #1a1a30; }
-        .res-bar { position: absolute; left: 0; top: 0; height: 100%; background: var(--accent); opacity: 0.2; transition: width 0.1s linear; }
-        .res-info { position: relative; display: flex; justify-content: space-between; font-family: 'Orbitron'; font-size: 0.8rem; }
-        .btn { width: 100%; padding: 18px; border: none; border-radius: 12px; font-family: 'Orbitron'; background: var(--accent); color: #000; font-weight: bold; margin-top: 15px; cursor: pointer; }
+        .label { font-size: 0.6rem; color: #505080; margin-bottom: 5px; }
+        .val { font-family: 'Orbitron', monospace; font-size: 1.2rem; color: #fff; margin-bottom: 10px; }
+        canvas { width: 100%; height: 60px; background: #000; border-radius: 6px; }
+        .results { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+        .res-row { background: var(--panel); padding: 12px; border-radius: 8px; border: 1px solid #1a1a30; }
+        .bar-bg { height: 10px; background: #000; border-radius: 5px; margin-top: 8px; overflow: hidden; }
+        .bar-fill { height: 100%; width: 0%; transition: width 0.1s linear; background: var(--accent); }
+        .btn { width: 100%; padding: 18px; border: none; border-radius: 12px; font-family: 'Orbitron'; font-weight: bold; background: var(--accent); color: #000; font-size: 1rem; margin-top: 15px; }
         .btn.stop { background: var(--warn); color: #fff; }
     </style>
     <script src="./edge-impulse-standalone.js"></script>
@@ -25,18 +27,33 @@
 <body>
     <div class="container">
         <h1>LOCK DETECTOR</h1>
+        
         <div class="monitor">
-            <div style="font-size: 0.6rem; color: #505080; margin-bottom: 5px;">INPUT PEAK LEVEL</div>
+            <div class="label">INPUT PEAK LEVEL</div>
             <div id="peakVal" class="val">0.0000</div>
             <canvas id="waveCanvas"></canvas>
         </div>
-        <div id="results" class="results">
+
+        <div class="results">
+            <div class="res-row">
+                <div style="display:flex; justify-content:space-between; font-family:'Orbitron'; font-size:0.8rem;">
+                    <span>LOCK</span><span id="txt-lock">0.0%</span>
+                </div>
+                <div class="bar-bg"><div id="bar-lock" class="bar-fill"></div></div>
             </div>
+            <div class="res-row">
+                <div style="display:flex; justify-content:space-between; font-family:'Orbitron'; font-size:0.8rem;">
+                    <span>NOISE</span><span id="txt-noise">0.0%</span>
+                </div>
+                <div class="bar-bg"><div id="bar-noise" class="bar-fill" style="background:var(--warn);"></div></div>
+            </div>
+        </div>
+
         <button id="mainBtn" class="btn" onclick="toggle()" disabled>INITIALIZING...</button>
     </div>
 
 <script>
-let classifier, audioCtx, processor, sampleBuf = [];
+let classifier, audioCtx, analyser, processor, sampleBuf = [];
 let isReady = false, isRecording = false;
 
 window.onload = async () => {
@@ -45,20 +62,13 @@ window.onload = async () => {
         await classifier.init();
         isReady = true;
         document.getElementById('mainBtn').disabled = false;
-        document.getElementById('mainBtn').innerText = 'START MONITORING';
-    } catch (e) { alert("Init Error: " + e.message); }
+        document.getElementById('mainBtn').innerText = 'START';
+    } catch (e) { alert("Error: " + e.message); }
 };
 
 async function toggle() {
     if (!isReady) return;
-    if (isRecording) {
-        isRecording = false;
-        document.getElementById('mainBtn').innerText = 'START MONITORING';
-        document.getElementById('mainBtn').classList.remove('stop');
-        if (audioCtx) audioCtx.close();
-    } else {
-        await start();
-    }
+    isRecording ? stop() : await start();
 }
 
 async function start() {
@@ -66,63 +76,79 @@ async function start() {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const source = audioCtx.createMediaStreamSource(stream);
-        const analyser = audioCtx.createAnalyser();
+        analyser = audioCtx.createAnalyser();
         processor = audioCtx.createScriptProcessor(4096, 1, 1);
-        source.connect(analyser); processor.connect(audioCtx.destination); source.connect(processor);
+        
+        source.connect(analyser);
+        processor.connect(audioCtx.destination);
+        source.connect(processor);
 
         processor.onaudioprocess = (e) => {
             const input = e.inputBuffer.getChannelData(0);
             let peak = 0;
             for (let i = 0; i < input.length; i++) {
-                sampleBuf.push(input[i]);
+                // 内部処理：音声を32768倍してAIに渡す（これが0%突破の鍵です）
+                sampleBuf.push(input[i] * 32768);
                 if (Math.abs(input[i]) > peak) peak = Math.abs(input[i]);
             }
             document.getElementById('peakVal').innerText = peak.toFixed(4);
 
             if (sampleBuf.length >= 16000) {
-                const raw = sampleBuf.slice(-16000);
-                sampleBuf.splice(0, 4000);
-                const res = classifier.classify(new Float32Array(raw));
-                if (res && (res.results || res.classification)) {
-                    updateUI(res.results || res.classification);
+                const raw = new Float32Array(sampleBuf.slice(-16000));
+                sampleBuf.splice(0, 4000); 
+
+                const res = classifier.classify(raw);
+                const results = res.results || res.classification;
+                
+                if (results) {
+                    // resultsが配列かオブジェクトかに関わらず処理
+                    const items = Array.isArray(results) ? results : Object.keys(results).map(k => ({label: k, value: results[k]}));
+                    
+                    items.forEach(r => {
+                        const label = r.label.toLowerCase();
+                        const val = (r.value * 100).toFixed(1) + '%';
+                        if (label.includes('lock')) {
+                            document.getElementById('bar-lock').style.width = val;
+                            document.getElementById('txt-lock').innerText = val;
+                        } else if (label.includes('noise')) {
+                            document.getElementById('bar-noise').style.width = val;
+                            document.getElementById('txt-noise').innerText = val;
+                        }
+                    });
                 }
             }
         };
+
         isRecording = true;
         document.getElementById('mainBtn').innerText = 'STOP';
-        document.getElementById('mainBtn').classList.add('stop');
-        
-        const cvs = document.getElementById('waveCanvas'), ctx = cvs.getContext('2d');
-        const draw = () => {
-            if (!isRecording) return;
-            requestAnimationFrame(draw);
-            const data = new Float32Array(analyser.fftSize);
-            analyser.getFloatTimeDomainData(data);
-            ctx.fillStyle = '#05050a'; ctx.fillRect(0,0,cvs.width,cvs.height);
-            ctx.strokeStyle = '#00ffaa'; ctx.beginPath();
-            for(let i=0; i<data.length; i++) {
-                const x = i * (cvs.width / data.length);
-                const y = (data[i]+1)/2 * cvs.height;
-                i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
-            }
-            ctx.stroke();
-        };
+        document.getElementById('mainBtn').className = 'btn stop';
         draw();
     } catch (e) { alert(e.message); }
 }
 
-function updateUI(results) {
-    const container = document.getElementById('results');
-    container.innerHTML = '';
-    const items = Array.isArray(results) ? results : Object.keys(results).map(key => ({label: key, value: results[key]}));
-    items.forEach(r => {
-        const pct = (r.value * 100).toFixed(1);
-        const row = document.createElement('div');
-        row.className = 'res-row';
-        row.innerHTML = `<div class="res-bar" style="width: ${pct}%"></div>
-            <div class="res-info"><span>${r.label.toUpperCase()}</span><span>${pct}%</span></div>`;
-        container.appendChild(row);
-    });
+function stop() {
+    isRecording = false;
+    if (audioCtx) audioCtx.close();
+    document.getElementById('mainBtn').innerText = 'START';
+    document.getElementById('mainBtn').className = 'btn';
+}
+
+function draw() {
+    if (!isRecording) return;
+    requestAnimationFrame(draw);
+    const canvas = document.getElementById('waveCanvas');
+    const ctx = canvas.getContext('2d');
+    const data = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(data);
+    ctx.fillStyle = '#0f0f1f'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#00ffaa'; ctx.lineWidth = 1.5; ctx.beginPath();
+    const step = canvas.width / data.length;
+    for (let i = 0; i < data.length; i++) {
+        const x = i * step;
+        const y = (data[i] + 1) / 2 * canvas.height;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
 }
 </script>
 </body>
