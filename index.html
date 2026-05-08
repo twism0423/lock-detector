@@ -3,58 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FINAL CHECK</title>
+    <title>FINAL DEBUG</title>
     <style>
-        /* 反映されたか一目でわかるよう、背景を警告の黄色にします */
-        body { background: yellow; color: black; font-family: monospace; padding: 20px; }
-        .log-area { background: white; border: 2px solid black; height: 300px; overflow: auto; padding: 10px; margin-top: 20px; }
-        .btn { width: 100%; padding: 20px; font-size: 20px; font-weight: bold; background: red; color: white; }
+        body { background: blue; color: white; font-family: monospace; padding: 20px; }
+        .log-area { background: #000; color: #0f0; height: 400px; overflow: auto; padding: 10px; border: 2px solid white; font-size: 12px; }
+        .btn { width: 100%; padding: 25px; font-size: 20px; font-weight: bold; background: #ff00ff; color: white; border: none; }
     </style>
     <script src="./edge-impulse-standalone.js"></script>
     <script src="./run-impulse.js"></script>
 </head>
 <body>
-    <h1>【最終確認画面】</h1>
-    <p>この画面が「黄色」なら、最新のコードが反映されています。</p>
-    
-    <button id="startBtn" class="btn" onclick="run()" disabled>AIエンジン起動中...</button>
-
-    <div id="log" class="log-area">ここにAIの生データを全て出します...</div>
+    <h1>【青：最終診断画面】</h1>
+    <button id="startBtn" class="btn" onclick="run()">1. マイクとエンジンを起動</button>
+    <div id="log" class="log-area">ここに全工程を記録します...<br></div>
 
 <script>
     let classifier, sampleBuf = [];
-    const log = (msg) => { document.getElementById('log').innerHTML += `<div>${msg}</div>`; };
-
-    window.onload = async () => {
-        try {
-            classifier = new EdgeImpulseClassifier();
-            await classifier.init();
-            document.getElementById('startBtn').disabled = false;
-            document.getElementById('startBtn').innerText = "マイク開始";
-            log("✅ AIエンジン準備完了");
-        } catch (e) { log("❌ エラー: " + e.message); }
+    const log = (msg) => { 
+        const d = new Date();
+        const time = `${d.getSeconds()}.${d.getMilliseconds()}`;
+        document.getElementById('log').innerHTML += `[${time}] ${msg}<br>`; 
     };
 
     async function run() {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const source = ctx.createMediaStreamSource(stream);
-        const processor = ctx.createScriptProcessor(4096, 1, 1);
-        source.connect(processor); processor.connect(ctx.destination);
+        document.getElementById('startBtn').disabled = true;
+        log("▶️ 処理開始...");
 
-        processor.onaudioprocess = (e) => {
-            const input = e.inputBuffer.getChannelData(0);
-            for (let i = 0; i < input.length; i++) sampleBuf.push(input[i]);
+        try {
+            // 1. マイクの準備
+            const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const source = ctx.createMediaStreamSource(stream);
+            const processor = ctx.createScriptProcessor(4096, 1, 1);
+            source.connect(processor); processor.connect(ctx.destination);
+            log("🎤 マイク接続成功");
 
-            if (sampleBuf.length >= 16000) {
-                const raw = sampleBuf.slice(-16000);
-                sampleBuf = [];
-                const res = classifier.classify(raw);
-                // AIが返してきた生データをそのまま文字として出す
-                log("判定結果: " + JSON.stringify(res.results || res.classification));
-            }
-        };
-        log("🎤 マイク入力中...");
+            // 2. エンジンの準備（ここで止まらないようにエラーを監視）
+            log("⚙️ AIエンジン読み込み中...");
+            classifier = new EdgeImpulseClassifier();
+            
+            // iPad Safariでフリーズしやすい箇所
+            await classifier.init().catch(e => log("❌ エンジン初期化失敗: " + e));
+            log("✅ AIエンジン準備完了！");
+
+            processor.onaudioprocess = async (e) => {
+                const input = e.inputBuffer.getChannelData(0);
+                for (let i = 0; i < input.length; i++) sampleBuf.push(input[i]);
+
+                if (sampleBuf.length >= 16000) {
+                    const raw = sampleBuf.slice(-16000);
+                    sampleBuf = [];
+                    
+                    // classifyは非同期(Promise)なので、必ずawaitで待つ
+                    try {
+                        const res = await classifier.classify(raw);
+                        const data = res.results || res.classification || res;
+                        log("判定成功 ➔ " + JSON.stringify(data));
+                    } catch (err) {
+                        log("❌ 判定エラー: " + err);
+                    }
+                }
+            };
+        } catch (e) {
+            log("❌ 全体エラー: " + e.message);
+        }
     }
 </script>
 </body>
