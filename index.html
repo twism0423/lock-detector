@@ -12,13 +12,12 @@
     .bg-grid { position: fixed; inset: 0; pointer-events: none; z-index: 0; background: radial-gradient(ellipse 80% 50% at 50% 0%, rgba(0,255,170,0.04) 0%, transparent 70%), linear-gradient(rgba(0,255,170,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,170,0.02) 1px, transparent 1px); background-size: auto, 50px 50px, 50px 50px; }
     .wrap { position: relative; z-index: 1; width: 100%; max-width: 430px; padding: 20px 16px 40px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
     .header { text-align: center; } .header h1 { font-family: 'Orbitron', monospace; font-size: 1.5rem; font-weight: 900; letter-spacing: 0.2em; background: linear-gradient(135deg, var(--lock), #00ccff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; } .header .sub { font-size: 0.6rem; letter-spacing: 0.2em; color: var(--dim); margin-top: 4px; }
-    .ring-wrap { position: relative; width: 190px; height: 190px; } .ring-svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); } .ring-track { fill: none; stroke: var(--border); stroke-width: 10; } .ring-fill { fill: none; stroke: var(--idle); stroke-width: 10; stroke-linecap: round; stroke-dasharray: 534; stroke-dashoffset: 534; transition: stroke-dashoffset 0.2s ease; } .ring-inner { position: absolute; inset: 18px; background: var(--surface); border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; } .ring-emoji { font-size: 1.8rem; } .ring-label { font-family: 'Orbitron', monospace; font-size: 1.6rem; font-weight: 900; } .ring-pct { font-size: 0.62rem; color: var(--dim); }
+    .ring-wrap { position: relative; width: 190px; height: 190px; } .ring-svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); } .ring-track { fill: none; stroke: var(--border); stroke-width: 10; } .ring-fill { fill: none; stroke: var(--idle); stroke-width: 10; stroke-linecap: round; stroke-dasharray: 534; stroke-dashoffset: 534; transition: stroke-dashoffset 0.15s ease; } .ring-inner { position: absolute; inset: 18px; background: var(--surface); border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; } .ring-emoji { font-size: 1.8rem; } .ring-label { font-family: 'Orbitron', monospace; font-size: 1.6rem; font-weight: 900; } .ring-pct { font-size: 0.62rem; color: var(--dim); }
     .card { width: 100%; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 12px; } .card-label { font-size: 0.58rem; letter-spacing: 0.15em; color: var(--dim); margin-bottom: 6px; } canvas { width: 100% !important; height: 60px !important; display: block; border-radius: 4px; }
     .nn-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; } .nn-name { font-size: 0.7rem; width: 50px; font-family: 'Orbitron', monospace; } .nn-track { flex: 1; height: 10px; background: var(--surface); border-radius: 5px; overflow: hidden; } .nn-fill { height: 100%; transition: width 0.1s linear; }
     .status { display: flex; align-items: center; gap: 6px; font-size: 0.65rem; color: var(--dim); } .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--idle); } .recording .dot { background: var(--lock); animation: blink 1s infinite; } @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
-    .btn { width: 100%; padding: 14px; border: none; border-radius: 12px; font-family: 'Orbitron', monospace; font-size: 0.9rem; font-weight: 700; background: linear-gradient(135deg, #00aa66, var(--lock)); color: #000; transition: 0.2s; } .btn:active { transform: scale(0.98); } .btn:disabled { opacity: 0.3; } .btn.stop { background: var(--noise); color: #fff; }
+    .btn { width: 100%; padding: 14px; border: none; border-radius: 12px; font-family: 'Orbitron', monospace; font-size: 0.9rem; font-weight: 700; background: linear-gradient(135deg, #00aa66, var(--lock)); color: #000; } .btn.stop { background: var(--noise); color: #fff; }
   </style>
-
   <script src="./edge-impulse-standalone.js"></script>
   <script src="./run-impulse.js"></script>
 </head>
@@ -29,7 +28,6 @@
     <h1>LOCK DETECTOR</h1>
     <div class="sub">AI WASM ENGINE — iPad Air M2</div>
   </div>
-
   <div id="ringWrap" class="ring-wrap">
     <div class="ring-inner">
       <div class="ring-emoji" id="ringEmoji">🔒</div>
@@ -41,18 +39,15 @@
       <circle class="ring-fill" id="ringFill" cx="95" cy="95" r="85" style="stroke:var(--idle);"/>
     </svg>
   </div>
-
   <div class="card">
     <div class="card-label">WAVEFORM</div>
     <canvas id="waveCanvas"></canvas>
   </div>
-
   <div class="card">
     <div class="card-label">AI OUTPUT</div>
     <div class="nn-row"><div class="nn-name" style="color:var(--lock)">LOCK</div><div class="nn-track"><div id="barLock" class="nn-fill" style="background:var(--lock);width:0%"></div></div></div>
     <div class="nn-row"><div class="nn-name" style="color:var(--noise)">NOISE</div><div class="nn-track"><div id="barNoise" class="nn-fill" style="background:var(--noise);width:0%"></div></div></div>
   </div>
-
   <div class="status" id="statusBar"><span class="dot"></span><span id="statusTxt">準備中...</span></div>
   <button class="btn" id="mainBtn" onclick="toggle()" disabled>🎙 録音開始</button>
 </div>
@@ -61,7 +56,6 @@
 let classifier, isReady = false, isRecording = false;
 let audioCtx, analyser, processor, sampleBuf = [];
 
-// 初期化
 window.onload = async () => {
     try {
         await new Promise(r => setTimeout(r, 500));
@@ -71,8 +65,7 @@ window.onload = async () => {
         document.getElementById('statusTxt').textContent = '準備完了';
         document.getElementById('mainBtn').disabled = false;
     } catch (e) {
-        document.getElementById('statusTxt').textContent = '起動エラー';
-        console.error(e);
+        document.getElementById('statusTxt').textContent = 'エラー: 起動失敗';
     }
 };
 
@@ -84,6 +77,7 @@ async function toggle() {
         document.getElementById('mainBtn').className = 'btn';
         document.getElementById('statusBar').className = 'status';
         if (audioCtx) audioCtx.close();
+        setIdle();
     } else {
         await start();
     }
@@ -91,29 +85,39 @@ async function toggle() {
 
 async function start() {
     try {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        // iPad Safariでの互換性を高めたAudio設定
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContextClass({ sampleRate: 16000 });
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const source = audioCtx.createMediaStreamSource(stream);
         analyser = audioCtx.createAnalyser();
         analyser.fftSize = 2048;
-        processor = audioCtx.createScriptProcessor(4096, 1, 1);
         
+        // 音を4096個ごとに切り取って処理
+        processor = audioCtx.createScriptProcessor(4096, 1, 1);
         source.connect(analyser);
         source.connect(processor);
         processor.connect(audioCtx.destination);
         
         processor.onaudioprocess = (e) => {
-            const data = Array.from(e.inputBuffer.getChannelData(0));
-            sampleBuf.push(...data);
+            const input = e.inputBuffer.getChannelData(0);
+            // データを配列に溜める
+            for (let i = 0; i < input.length; i++) {
+                sampleBuf.push(input[i]);
+            }
             
-            // 1秒分(16000個)溜まったら推論に回す
-            if (sampleBuf.length >= 16000) {
-                const chunk = sampleBuf.splice(0, 16000);
-                try {
-                    // 推論実行！
-                    const res = classifier.classify(chunk);
-                    if (res && res.results) updateUI(res.results);
-                } catch (err) { console.error("Inference error:", err); }
+            // 1秒分(16000個)を超えたら、古いものから削って常に16000個にする
+            if (sampleBuf.length > 16000) {
+                sampleBuf.splice(0, sampleBuf.length - 16000);
+            }
+            
+            // 16000個揃っている時に、0.25秒（4000個分）ごとに推論を実行する
+            if (sampleBuf.length === 16000) {
+                const inferenceData = new Float32Array(sampleBuf);
+                const res = classifier.classify(inferenceData);
+                if (res && res.results) {
+                    updateUI(res.results);
+                }
             }
         };
         isRecording = true;
@@ -121,7 +125,7 @@ async function start() {
         document.getElementById('mainBtn').className = 'btn stop';
         document.getElementById('statusBar').className = 'status recording';
         draw();
-    } catch (e) { alert("マイク起動失敗: " + e.message); }
+    } catch (e) { alert("マイクエラー: " + e.message); }
 }
 
 function updateUI(results) {
@@ -132,23 +136,31 @@ function updateUI(results) {
         if (label === 'noise') noise = r.value;
     });
 
-    // バーを更新
+    // ゲージの更新
     document.getElementById('barLock').style.width = (lock * 100) + '%';
     document.getElementById('barNoise').style.width = (noise * 100) + '%';
 
-    // メイン表示の更新
     const val = lock > noise ? lock : noise;
-    const labelTxt = lock > noise ? 'LOCK' : 'NOISE';
-    const color = lock > noise ? '#00ffaa' : '#ff3366';
+    const isLock = lock > noise;
+    const color = isLock ? '#00ffaa' : '#ff3366';
 
     document.getElementById('ringPct').textContent = (val * 100).toFixed(1) + '%';
-    document.getElementById('ringLabel').textContent = labelTxt;
+    document.getElementById('ringLabel').textContent = isLock ? 'LOCK' : 'NOISE';
     document.getElementById('ringLabel').style.color = color;
-    document.getElementById('ringEmoji').textContent = lock > noise ? '🔒' : '〜';
+    document.getElementById('ringEmoji').textContent = isLock ? '🔒' : '〜';
     
     const fill = document.getElementById('ringFill');
     fill.style.stroke = color;
     fill.style.strokeDashoffset = 534 * (1 - val);
+}
+
+function setIdle() {
+    document.getElementById('ringLabel').textContent = 'READY';
+    document.getElementById('ringLabel').style.color = 'var(--idle)';
+    document.getElementById('ringFill').style.strokeDashoffset = 534;
+    document.getElementById('ringFill').style.stroke = 'var(--idle)';
+    document.getElementById('barLock').style.width = '0%';
+    document.getElementById('barNoise').style.width = '0%';
 }
 
 function draw() {
@@ -170,12 +182,11 @@ function draw() {
     ctx.strokeStyle = '#00ffaa';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    const sliceWidth = canvas.width / data.length;
-    let x = 0;
+    const step = canvas.width / data.length;
     for (let i = 0; i < data.length; i++) {
+        const x = i * step;
         const y = (data[i] + 1) / 2 * canvas.height;
         i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-        x += sliceWidth;
     }
     ctx.stroke();
 }
