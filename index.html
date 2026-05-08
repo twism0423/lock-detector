@@ -3,67 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FINAL DEBUG</title>
+    <title>AI BOOT CHECK</title>
     <style>
-        /* 反映確認のため、背景を赤にします */
-        body { background: #ff0000; color: white; font-family: monospace; padding: 10px; font-size: 12px; }
-        .log { background: black; color: #0f0; height: 400px; overflow: auto; padding: 10px; border: 2px solid white; margin-top: 10px; }
-        .btn { width: 100%; padding: 25px; font-size: 18px; font-weight: bold; }
+        body { background: #000; color: #0f0; font-family: monospace; padding: 15px; }
+        .log-box { background: #111; border: 1px solid #333; height: 450px; overflow: auto; padding: 10px; font-size: 11px; margin-top: 10px; }
+        .btn { width: 100%; padding: 25px; font-size: 18px; font-weight: bold; background: #222; color: #555; border: 1px solid #444; }
+        .btn.ready { background: #0f0; color: #000; border: none; }
     </style>
     <script src="./edge-impulse-standalone.js"></script>
     <script src="./run-impulse.js"></script>
 </head>
 <body>
-    <h2>【デバッグ最終段階】</h2>
-    <button id="btn" class="btn" onclick="run()" disabled>AIエンジンロード中...</button>
-    <div id="log" class="log">ここに全ての動きを記録します...</div>
+    <h2 id="title">AI 起動ステータス</h2>
+    <button id="btn" class="btn" onclick="run()" disabled>AIエンジン起動を待機中...</button>
+    <div id="log" class="log-box"></div>
 
 <script>
-    const logger = (m) => { document.getElementById('log').innerHTML += `<div>${new Date().toLocaleTimeString()}: ${m}</div>`; };
-    let classifier, sampleBuf = [];
+    const log = (m) => { document.getElementById('log').innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${m}</div>`; };
+    let classifier, isInitialized = false;
 
-    window.onload = async () => {
+    // ページ読み込みと同時に初期化を強制
+    window.addEventListener('load', async () => {
+        log("1. システム開始...");
         try {
-            logger("1. エンジン初期化開始...");
+            if (typeof EdgeImpulseClassifier === 'undefined') {
+                throw new Error("JSファイルが読み込めていません。");
+            }
             classifier = new EdgeImpulseClassifier();
+            log("2. WASMロード開始（これに時間がかかる場合があります）...");
+            
+            // 初期化を待つ
             await classifier.init();
-            logger("2. ✅ 初期化成功！");
-            document.getElementById('btn').disabled = false;
-            document.getElementById('btn').innerText = "マイク録音開始";
-        } catch (e) { logger("❌ 初期化エラー: " + e.message); }
-    };
+            
+            isInitialized = true;
+            log("3. ✅ AIエンジン起動成功！");
+            
+            const btn = document.getElementById('btn');
+            btn.disabled = false;
+            btn.innerText = "マイク録音開始";
+            btn.className = "btn ready";
+            document.getElementById('title').innerText = "AI 準備完了";
+            document.getElementById('title').style.color = "#0f0";
+        } catch (e) {
+            log("❌ 初期化エラー: " + e.message);
+            log("※WASMファイルが存在するか、パスが正しいか確認してください。");
+        }
+    });
 
     async function run() {
+        if (!isInitialized) {
+            log("❌ まだ準備ができていません。");
+            return;
+        }
+        log("4. マイク使用許可をリクエスト中...");
         try {
-            logger("3. マイクアクセス開始...");
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+            const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const source = audioCtx.createMediaStreamSource(stream);
-            const processor = audioCtx.createScriptProcessor(4096, 1, 1);
-            
-            source.connect(processor);
-            processor.connect(audioCtx.destination);
+            const source = ctx.createMediaStreamSource(stream);
+            const processor = ctx.createScriptProcessor(4096, 1, 1);
+            source.connect(processor); processor.connect(ctx.destination);
 
+            let buffer = [];
             processor.onaudioprocess = (e) => {
                 const input = e.inputBuffer.getChannelData(0);
-                for (let i = 0; i < input.length; i++) sampleBuf.push(input[i]);
+                for (let i = 0; i < input.length; i++) buffer.push(input[i]);
 
-                if (sampleBuf.length >= 16000) {
-                    logger("4. 1秒分のデータ（16000件）到達。計算します...");
-                    const rawData = new Float32Array(sampleBuf.slice(0, 16000));
-                    sampleBuf = sampleBuf.slice(4000); // 0.25秒分ずらす
-
+                if (buffer.length >= 16000) {
+                    const data = new Float32Array(buffer.slice(0, 16000));
+                    buffer = buffer.slice(4000); 
                     try {
-                        // classifyを呼び出し、結果をそのままログに出す
-                        const res = classifier.classify(rawData);
-                        logger("5. 🎉 判定成功: " + JSON.stringify(res.results || res.classification || res));
+                        const res = classifier.classify(data);
+                        log("🎉 判定結果: " + JSON.stringify(res.results || res.classification));
                     } catch (err) {
-                        logger("❌ 推論実行エラー: " + err.message);
+                        log("❌ 推論エラー: " + err.message);
                     }
                 }
             };
-            logger("6. 🎤 録音ループ開始...");
-        } catch (e) { logger("❌ マイクエラー: " + e.message); }
+            log("5. 🎤 リアルタイム判定中...");
+            document.getElementById('btn').style.display = "none";
+        } catch (e) { log("❌ マイクエラー: " + e.message); }
     }
 </script>
 </body>
