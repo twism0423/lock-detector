@@ -1,215 +1,73 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>内鍵音判別 AI</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+JP:wght@300;400;700&display=swap');
-    :root { --bg: #080810; --surface: #0f0f1a; --card: #13131f; --border: #1a1a30; --lock: #00ffaa; --noise: #ff3366; --idle: #2a2a4a; --text: #d0d0e8; --dim: #4a4a70; }
-    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-    body { background: var(--bg); color: var(--text); font-family: 'Noto Sans JP', sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; overflow-x: hidden; }
-    .bg-grid { position: fixed; inset: 0; pointer-events: none; z-index: 0; background: radial-gradient(ellipse 80% 50% at 50% 0%, rgba(0,255,170,0.04) 0%, transparent 70%), linear-gradient(rgba(0,255,170,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,170,0.02) 1px, transparent 1px); background-size: auto, 50px 50px, 50px 50px; }
-    .wrap { position: relative; z-index: 1; width: 100%; max-width: 430px; padding: 20px 16px 40px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
-    .header { text-align: center; } .header h1 { font-family: 'Orbitron', monospace; font-size: 1.5rem; font-weight: 900; letter-spacing: 0.2em; background: linear-gradient(135deg, var(--lock), #00ccff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; } .header .sub { font-size: 0.6rem; letter-spacing: 0.2em; color: var(--dim); margin-top: 4px; }
-    .ring-wrap { position: relative; width: 190px; height: 190px; } .ring-svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); } .ring-track { fill: none; stroke: var(--border); stroke-width: 10; } .ring-fill { fill: none; stroke: var(--idle); stroke-width: 10; stroke-linecap: round; stroke-dasharray: 534; stroke-dashoffset: 534; transition: stroke-dashoffset 0.3s ease, stroke 0.3s ease; } .ring-glow { position: absolute; inset: -4px; border-radius: 50%; opacity: 0; transition: opacity 0.3s; pointer-events: none; } .ring-inner { position: absolute; inset: 18px; background: var(--surface); border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; } .ring-emoji { font-size: 1.8rem; opacity: 0; transition: opacity 0.3s; } .ring-label { font-family: 'Orbitron', monospace; font-size: 1.6rem; font-weight: 900; letter-spacing: 0.08em; color: var(--idle); transition: color 0.3s; line-height: 1; } .ring-pct { font-size: 0.62rem; color: var(--dim); letter-spacing: 0.1em; }
-    .card { width: 100%; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; } .card-label { font-size: 0.58rem; letter-spacing: 0.15em; color: var(--dim); margin-bottom: 6px; } canvas { width: 100% !important; height: 60px !important; display: block; border-radius: 4px; }
-    .nn-rows { display: flex; flex-direction: column; gap: 8px; } .nn-row { display: flex; align-items: center; gap: 8px; } .nn-name { font-family: 'Orbitron', monospace; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; width: 52px; flex-shrink: 0; } .nn-name.lock { color: var(--lock); } .nn-name.noise { color: var(--noise); } .nn-track { flex: 1; height: 14px; background: var(--surface); border-radius: 7px; overflow: hidden; } .nn-fill { height: 100%; border-radius: 7px; transition: width 0.25s ease; width: 0%; } .nn-fill.lock { background: linear-gradient(90deg, #007744, var(--lock)); } .nn-fill.noise { background: linear-gradient(90deg, #880022, var(--noise)); } .nn-val { font-size: 0.72rem; color: var(--dim); width: 38px; text-align: right; flex-shrink: 0; }
-    .status { display: flex; align-items: center; gap: 6px; font-size: 0.65rem; color: var(--dim); letter-spacing: 0.06em; } .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--idle); flex-shrink: 0; } .recording .dot { background: var(--lock); animation: blink 1s infinite; } @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.15} }
-    .btn { width: 100%; padding: 14px; border: none; border-radius: 12px; cursor: pointer; font-family: 'Orbitron', monospace; font-size: 0.9rem; font-weight: 700; letter-spacing: 0.15em; transition: all 0.2s; background: linear-gradient(135deg, #00aa66, var(--lock)); color: #000; } .btn:active { transform: scale(0.97); } .btn.stop { background: linear-gradient(135deg, #aa0022, var(--noise)); color: #fff; } .btn:disabled { opacity: 0.35; cursor: not-allowed; }
-    .log-list { display: flex; flex-direction: column; gap: 4px; max-height: 100px; overflow-y: auto; } .log-item { display: flex; justify-content: space-between; align-items: center; font-size: 0.68rem; padding: 4px 8px; border-radius: 6px; background: var(--surface); } .log-item.lock { border-left: 3px solid var(--lock); } .log-item.noise { border-left: 3px solid var(--noise); } .log-badge { font-family: 'Orbitron', monospace; font-size: 0.7rem; font-weight: 700; } .log-badge.lock { color: var(--lock); } .log-badge.noise { color: var(--noise); } .log-time { color: var(--dim); font-size: 0.6rem; } .log-conf { color: var(--dim); font-size: 0.62rem; } .empty { font-size: 0.65rem; color: var(--dim); text-align: center; padding: 10px; }
-  </style>
-
-  <script src="./edge-impulse-standalone.js"></script>
-  <script src="./run-impulse.js"></script>
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIシステム診断</title>
+    <style>
+        body { background: #080810; color: #00ffaa; font-family: monospace; padding: 20px; line-height: 1.5; }
+        .log-box { border: 1px solid #1a1a30; background: #0f0f1a; padding: 15px; border-radius: 8px; min-height: 200px; margin-top: 10px; white-space: pre-wrap; font-size: 13px; }
+        .error { color: #ff3366; font-weight: bold; }
+        .success { color: #00ffaa; }
+        h2 { font-size: 1.2rem; margin-bottom: 5px; }
+        button { background: #00ffaa; color: #000; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; margin-top: 20px; }
+    </style>
 </head>
 <body>
-<div class="bg-grid"></div>
-<div class="wrap">
-  <div class="header">
-    <h1>LOCK DETECTOR</h1>
-    <div class="sub">内鍵音判別 AI — EDGE IMPULSE WASM</div>
-  </div>
+    <h2>AIシステム起動テスト</h2>
+    <div id="status">⏳ 診断を開始します...</div>
+    <div id="log" class="log-box"></div>
+    <button onclick="location.reload()">再試行</button>
 
-  <div class="ring-wrap" id="ringWrap">
-    <div class="ring-glow"></div>
-    <svg class="ring-svg" viewBox="0 0 190 190">
-      <circle class="ring-track" cx="95" cy="95" r="85"/>
-      <circle class="ring-fill" id="ringFill" cx="95" cy="95" r="85"/>
-    </svg>
-    <div class="ring-inner">
-      <div class="ring-emoji" id="ringEmoji">🔒</div>
-      <div class="ring-label" id="ringLabel">接続中...</div>
-      <div class="ring-pct" id="ringPct">--.--%</div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-label">WAVEFORM</div>
-    <canvas id="waveCanvas" width="800" height="120"></canvas>
-  </div>
-
-  <div class="card">
-    <div class="card-label">NEURAL NETWORK OUTPUT</div>
-    <div class="nn-rows">
-      <div class="nn-row"><div class="nn-name lock">LOCK</div><div class="nn-track"><div class="nn-fill lock" id="barLock"></div></div><div class="nn-val" id="valLock">0%</div></div>
-      <div class="nn-row"><div class="nn-name noise">NOISE</div><div class="nn-track"><div class="nn-fill noise" id="barNoise"></div></div><div class="nn-val" id="valNoise">0%</div></div>
-    </div>
-  </div>
-
-  <div class="status" id="statusBar">
-    <span class="dot"></span>
-    <span id="statusTxt">AIエンジンを起動しています...</span>
-  </div>
-  <button class="btn" id="mainBtn" onclick="toggle()" disabled>🎙 録音開始</button>
-
-  <div class="card">
-    <div class="card-label">DETECTION LOG</div>
-    <div class="log-list" id="logList">
-      <div class="empty">判別結果がここに表示されます</div>
-    </div>
-  </div>
-</div>
-
-<script>
-let classifier = null;
-let isReady = false;
-
-// ページ読み込み完了後に初期化を実行
-window.addEventListener('DOMContentLoaded', async () => {
-    const statusTxt = document.getElementById('statusTxt');
-    try {
-        // iPadのメモリ確保待ち
-        await new Promise(r => setTimeout(r, 800));
-        
-        if (typeof EdgeImpulseClassifier === 'undefined') {
-            throw new Error("AIライブラリの読み込みに失敗しました。ファイルが存在するか確認してください。");
+    <script>
+        const logBox = document.getElementById('log');
+        function addLog(msg, isError = false) {
+            const span = document.createElement('div');
+            span.className = isError ? 'error' : 'success';
+            span.innerHTML = `> ${msg}`;
+            logBox.appendChild(span);
         }
+        window.onerror = function(e) { addLog("システムエラー: " + e, true); };
+    </script>
 
-        classifier = new EdgeImpulseClassifier();
-        await classifier.init();
-        
-        isReady = true;
-        statusTxt.textContent = '準備完了！録音を開始してください';
-        document.getElementById('ringLabel').textContent = '待機中';
-        document.getElementById('mainBtn').disabled = false;
-    } catch (e) {
-        statusTxt.textContent = 'エラー: ' + e.message;
-        console.error(e);
-        // エラー詳細をポップアップ（デバッグ用）
-        alert("初期化エラー詳細: " + e.message);
-    }
-});
+    <script src="./edge-impulse-standalone.js" onload="addLog('edge-impulse-standalone.js 読み込み成功')" onerror="addLog('edge-impulse-standalone.js が見つかりません', true)"></script>
+    <script src="./run-impulse.js" onload="addLog('run-impulse.js 読み込み成功')" onerror="addLog('run-impulse.js が見つかりません', true)"></script>
 
-const SAMPLE_RATE = 16000;
-let audioCtx, analyser, processor, source, stream, isRecording = false, raf = null, sampleBuf = [], lastLabel = null;
+    <script>
+        window.onload = async () => {
+            addLog("ページ全体のロード完了");
+            const status = document.getElementById('status');
 
-async function toggle() { if (!isReady) return; isRecording ? stop() : await start(); }
+            try {
+                addLog("EdgeImpulseClassifier の確認中...");
+                if (typeof EdgeImpulseClassifier === 'undefined') {
+                    throw new Error("AIエンジンのクラスが見つかりません。JSファイルが正しく読み込まれていない可能性があります。");
+                }
+                addLog("EdgeImpulseClassifier を発見");
 
-async function start() {
-  try {
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    audioCtx = new AudioContextClass({ sampleRate: SAMPLE_RATE });
-    if (audioCtx.state === 'suspended') await audioCtx.resume();
-    stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: { sampleRate: SAMPLE_RATE, channelCount: 1, echoCancellation: false } 
-    });
-    analyser = audioCtx.createAnalyser();
-    processor = audioCtx.createScriptProcessor(4096, 1, 1);
-    source = audioCtx.createMediaStreamSource(stream);
-    source.connect(analyser); source.connect(processor); processor.connect(audioCtx.destination);
-    
-    processor.onaudioprocess = (e) => {
-      const data = Array.from(e.inputBuffer.getChannelData(0));
-      sampleBuf.push(...data);
-      // 1秒分溜まったら推論
-      if (sampleBuf.length >= SAMPLE_RATE) {
-        runWasmInference(sampleBuf.splice(0, SAMPLE_RATE));
-      }
-    };
-    isRecording = true;
-    document.getElementById('mainBtn').textContent = '■ 停止';
-    document.getElementById('mainBtn').className = 'btn stop';
-    document.getElementById('statusBar').className = 'status recording';
-    loop();
-  } catch(err) { alert('マイクエラー: ' + err.message); }
-}
+                addLog("エンジンの初期化 (WASM) を開始...");
+                const classifier = new EdgeImpulseClassifier();
+                
+                // 3秒でタイムアウト設定（フリーズ対策）
+                const initPromise = classifier.init();
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error("初期化がタイムアウトしました。メモリ不足かWASM非対応の可能性があります。")), 5000)
+                );
 
-function stop() {
-  if (raf) cancelAnimationFrame(raf);
-  try { processor.disconnect(); source.disconnect(); stream.getTracks().forEach(t => t.stop()); audioCtx.close(); } catch(e){}
-  sampleBuf = []; isRecording = false;
-  document.getElementById('mainBtn').textContent = '🎙 録音開始';
-  document.getElementById('mainBtn').className = 'btn';
-  document.getElementById('statusBar').className = 'status';
-  setIdle();
-}
+                await Promise.race([initPromise, timeoutPromise]);
+                
+                addLog("✅ エンジンの初期化に成功しました！");
+                status.innerHTML = "🎉 正常に起動しました！";
+                
+                const project = classifier.getProjectInfo();
+                addLog(`モデル名: ${project.name} (v${project.deploy_version})`);
 
-function runWasmInference(chunk) {
-    try {
-        let res = classifier.classify(chunk);
-        let lock = 0, noise = 0;
-        res.results.forEach(r => {
-            const label = r.label.toLowerCase();
-            if (label === 'lock') lock = r.value;
-            if (label === 'noise') noise = r.value;
-        });
-        updateUI(lock, noise);
-    } catch (e) { console.error("推論失敗", e); }
-}
-
-function updateUI(lock, noise) {
-  const lp = (lock * 100).toFixed(1), np = (noise * 100).toFixed(1);
-  document.getElementById('barLock').style.width = lp + '%';
-  document.getElementById('barNoise').style.width = np + '%';
-  document.getElementById('valLock').textContent = lp + '%';
-  document.getElementById('valNoise').textContent = np + '%';
-  
-  const isLock = lock >= 0.7; // 70%以上の確信度でLOCKと判定
-  const conf = isLock ? lock : noise;
-  const label = isLock ? 'LOCK' : 'NOISE';
-  
-  document.getElementById('ringFill').style.strokeDashoffset = (534 * (1 - conf)).toFixed(1);
-  document.getElementById('ringPct').textContent = (conf * 100).toFixed(1) + '%';
-  
-  const wrap = document.getElementById('ringWrap'), lbl = document.getElementById('ringLabel'), em = document.getElementById('ringEmoji');
-  if (isLock) {
-    wrap.className = 'ring-wrap state-lock'; lbl.textContent = 'LOCK'; em.textContent = '🔒'; em.style.opacity = '1';
-  } else {
-    wrap.className = 'ring-wrap state-noise'; lbl.textContent = 'NOISE'; em.textContent = '〜'; em.style.opacity = '0.6';
-  }
-  if (label !== lastLabel && isLock) { lastLabel = label; addLog(label, lp, np); }
-}
-
-function addLog(label, lp, np) {
-  const list = document.getElementById('logList');
-  if (list.querySelector('.empty')) list.innerHTML = '';
-  const el = document.createElement('div');
-  el.className = `log-item ${label.toLowerCase()}`;
-  el.innerHTML = `<span class="log-badge ${label.toLowerCase()}">${label}</span><span class="log-conf">L:${lp}% N:${np}%</span><span class="log-time">${new Date().toLocaleTimeString('ja-JP')}</span>`;
-  list.insertBefore(el, list.firstChild);
-  if (list.children.length > 5) list.removeChild(list.lastChild);
-}
-
-function setIdle() {
-  document.getElementById('ringWrap').className = 'ring-wrap';
-  document.getElementById('ringLabel').textContent = '待機中';
-  document.getElementById('ringFill').style.strokeDashoffset = '534';
-}
-
-const wCvs = document.getElementById('waveCanvas'), wCtx = wCvs.getContext('2d');
-function loop() {
-  if (!isRecording) return;
-  raf = requestAnimationFrame(loop);
-  const time = new Float32Array(analyser.fftSize);
-  analyser.getFloatTimeDomainData(time);
-  wCtx.fillStyle = '#0f0f1a'; wCtx.fillRect(0, 0, wCvs.width, wCvs.height);
-  wCtx.strokeStyle = '#1a1a30'; wCtx.beginPath(); wCtx.moveTo(0, wCvs.height/2); wCtx.lineTo(wCvs.width, wCvs.height/2); wCtx.stroke();
-  wCtx.strokeStyle = '#00ffaa'; wCtx.lineWidth = 2; wCtx.beginPath();
-  time.forEach((v, i) => { const x = i * (wCvs.width / time.length), y = (v + 1) / 2 * wCvs.height; i === 0 ? wCtx.moveTo(x, y) : wCtx.lineTo(x, y); });
-  wCtx.stroke();
-}
-</script>
+            } catch (e) {
+                addLog("❌ 停止原因: " + e.message, true);
+                status.innerHTML = "⚠️ 起動に失敗しました";
+                console.error(e);
+            }
+        };
+    </script>
 </body>
 </html>
