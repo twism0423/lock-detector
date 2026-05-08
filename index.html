@@ -20,8 +20,8 @@
     .log-list { display: flex; flex-direction: column; gap: 4px; max-height: 100px; overflow-y: auto; } .log-item { display: flex; justify-content: space-between; align-items: center; font-size: 0.68rem; padding: 4px 8px; border-radius: 6px; background: var(--surface); } .log-item.lock { border-left: 3px solid var(--lock); } .log-item.noise { border-left: 3px solid var(--noise); } .log-badge { font-family: 'Orbitron', monospace; font-size: 0.7rem; font-weight: 700; } .log-badge.lock { color: var(--lock); } .log-badge.noise { color: var(--noise); } .log-time { color: var(--dim); font-size: 0.6rem; } .log-conf { color: var(--dim); font-size: 0.62rem; } .empty { font-size: 0.65rem; color: var(--dim); text-align: center; padding: 10px; }
   </style>
 
-  <script src="edge-impulse-standalone.js"></script>
-  <script src="run-impulse.js"></script>
+  <script src="./edge-impulse-standalone.js"></script>
+  <script src="./run-impulse.js"></script>
 
 </head>
 <body>
@@ -40,7 +40,7 @@
     </svg>
     <div class="ring-inner">
       <div class="ring-emoji" id="ringEmoji">🔒</div>
-      <div class="ring-label" id="ringLabel">準備中...</div>
+      <div class="ring-label" id="ringLabel">接続中...</div>
       <div class="ring-pct" id="ringPct">--.--%</div>
     </div>
   </div>
@@ -76,19 +76,31 @@
 let classifier = null;
 let isReady = false;
 
-(async () => {
+// ページ読み込み完了後に初期化を実行
+window.addEventListener('DOMContentLoaded', async () => {
+    const statusTxt = document.getElementById('statusTxt');
     try {
+        // iPadのメモリ確保待ち
+        await new Promise(r => setTimeout(r, 800));
+        
+        if (typeof EdgeImpulseClassifier === 'undefined') {
+            throw new Error("AIライブラリの読み込みに失敗しました。ファイルが存在するか確認してください。");
+        }
+
         classifier = new EdgeImpulseClassifier();
         await classifier.init();
+        
         isReady = true;
-        document.getElementById('statusTxt').textContent = '準備完了！マイクを開始してください';
+        statusTxt.textContent = '準備完了！録音を開始してください';
         document.getElementById('ringLabel').textContent = '待機中';
         document.getElementById('mainBtn').disabled = false;
     } catch (e) {
-        document.getElementById('statusTxt').textContent = 'エラー: エンジンの起動に失敗しました';
+        statusTxt.textContent = 'エラー: ' + e.message;
         console.error(e);
+        // エラー詳細をポップアップ（デバッグ用）
+        alert("初期化エラー詳細: " + e.message);
     }
-})();
+});
 
 const SAMPLE_RATE = 16000;
 let audioCtx, analyser, processor, source, stream, isRecording = false, raf = null, sampleBuf = [], lastLabel = null;
@@ -100,22 +112,28 @@ async function start() {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     audioCtx = new AudioContextClass({ sampleRate: SAMPLE_RATE });
     if (audioCtx.state === 'suspended') await audioCtx.resume();
-    stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: SAMPLE_RATE, channelCount: 1 } });
+    stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { sampleRate: SAMPLE_RATE, channelCount: 1, echoCancellation: false } 
+    });
     analyser = audioCtx.createAnalyser();
     processor = audioCtx.createScriptProcessor(4096, 1, 1);
     source = audioCtx.createMediaStreamSource(stream);
     source.connect(analyser); source.connect(processor); processor.connect(audioCtx.destination);
+    
     processor.onaudioprocess = (e) => {
       const data = Array.from(e.inputBuffer.getChannelData(0));
       sampleBuf.push(...data);
-      if (sampleBuf.length >= SAMPLE_RATE) { runWasmInference(sampleBuf.splice(0, SAMPLE_RATE)); }
+      // 1秒分溜まったら推論
+      if (sampleBuf.length >= SAMPLE_RATE) {
+        runWasmInference(sampleBuf.splice(0, SAMPLE_RATE));
+      }
     };
     isRecording = true;
     document.getElementById('mainBtn').textContent = '■ 停止';
     document.getElementById('mainBtn').className = 'btn stop';
     document.getElementById('statusBar').className = 'status recording';
     loop();
-  } catch(err) { document.getElementById('statusTxt').textContent = 'エラー: ' + err.message; }
+  } catch(err) { alert('マイクエラー: ' + err.message); }
 }
 
 function stop() {
@@ -125,16 +143,20 @@ function stop() {
   document.getElementById('mainBtn').textContent = '🎙 録音開始';
   document.getElementById('mainBtn').className = 'btn';
   document.getElementById('statusBar').className = 'status';
+  setIdle();
 }
 
 function runWasmInference(chunk) {
-    let res = classifier.classify(chunk);
-    let lock = 0, noise = 0;
-    res.results.forEach(r => {
-        if (r.label.toLowerCase() === 'lock') lock = r.value;
-        if (r.label.toLowerCase() === 'noise') noise = r.value;
-    });
-    updateUI(lock, noise);
+    try {
+        let res = classifier.classify(chunk);
+        let lock = 0, noise = 0;
+        res.results.forEach(r => {
+            const label = r.label.toLowerCase();
+            if (label === 'lock') lock = r.value;
+            if (label === 'noise') noise = r.value;
+        });
+        updateUI(lock, noise);
+    } catch (e) { console.error("推論失敗", e); }
 }
 
 function updateUI(lock, noise) {
@@ -143,13 +165,21 @@ function updateUI(lock, noise) {
   document.getElementById('barNoise').style.width = np + '%';
   document.getElementById('valLock').textContent = lp + '%';
   document.getElementById('valNoise').textContent = np + '%';
-  const isLock = lock >= noise, conf = isLock ? lock : noise, label = isLock ? 'LOCK' : 'NOISE';
+  
+  const isLock = lock >= 0.7; // 70%以上の確信度でLOCKと判定
+  const conf = isLock ? lock : noise;
+  const label = isLock ? 'LOCK' : 'NOISE';
+  
   document.getElementById('ringFill').style.strokeDashoffset = (534 * (1 - conf)).toFixed(1);
   document.getElementById('ringPct').textContent = (conf * 100).toFixed(1) + '%';
+  
   const wrap = document.getElementById('ringWrap'), lbl = document.getElementById('ringLabel'), em = document.getElementById('ringEmoji');
-  if (isLock) { wrap.className = 'ring-wrap state-lock'; lbl.textContent = 'LOCK'; em.textContent = '🔒'; }
-  else { wrap.className = 'ring-wrap state-noise'; lbl.textContent = 'NOISE'; em.textContent = '〜'; }
-  if (label !== lastLabel) { lastLabel = label; addLog(label, lp, np); }
+  if (isLock) {
+    wrap.className = 'ring-wrap state-lock'; lbl.textContent = 'LOCK'; em.textContent = '🔒'; em.style.opacity = '1';
+  } else {
+    wrap.className = 'ring-wrap state-noise'; lbl.textContent = 'NOISE'; em.textContent = '〜'; em.style.opacity = '0.6';
+  }
+  if (label !== lastLabel && isLock) { lastLabel = label; addLog(label, lp, np); }
 }
 
 function addLog(label, lp, np) {
@@ -162,6 +192,12 @@ function addLog(label, lp, np) {
   if (list.children.length > 5) list.removeChild(list.lastChild);
 }
 
+function setIdle() {
+  document.getElementById('ringWrap').className = 'ring-wrap';
+  document.getElementById('ringLabel').textContent = '待機中';
+  document.getElementById('ringFill').style.strokeDashoffset = '534';
+}
+
 const wCvs = document.getElementById('waveCanvas'), wCtx = wCvs.getContext('2d');
 function loop() {
   if (!isRecording) return;
@@ -170,7 +206,7 @@ function loop() {
   analyser.getFloatTimeDomainData(time);
   wCtx.fillStyle = '#0f0f1a'; wCtx.fillRect(0, 0, wCvs.width, wCvs.height);
   wCtx.strokeStyle = '#1a1a30'; wCtx.beginPath(); wCtx.moveTo(0, wCvs.height/2); wCtx.lineTo(wCvs.width, wCvs.height/2); wCtx.stroke();
-  wCtx.strokeStyle = '#00ffaa'; wCtx.beginPath();
+  wCtx.strokeStyle = '#00ffaa'; wCtx.lineWidth = 2; wCtx.beginPath();
   time.forEach((v, i) => { const x = i * (wCvs.width / time.length), y = (v + 1) / 2 * wCvs.height; i === 0 ? wCtx.moveTo(x, y) : wCtx.lineTo(x, y); });
   wCtx.stroke();
 }
