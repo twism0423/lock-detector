@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>LOCK DETECTOR DEBUG</title>
+  <title>LOCK DETECTOR</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap');
     body { background: #05050a; color: #d0d0e8; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; }
@@ -11,14 +11,11 @@
     h1 { font-family: 'Orbitron'; font-size: 1.1rem; color: #00ffaa; margin-bottom: 20px; letter-spacing: 2px; }
     .val-box { font-family: 'Orbitron'; font-size: 1.2rem; color: #fff; margin-bottom: 10px; }
     canvas { width: 100%; height: 60px; background: #000; border-radius: 4px; }
-    .res-list { margin-top: 10px; }
-    .res-item { background: #151525; padding: 12px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid #00ffaa; }
-    .res-label { font-family: 'Orbitron'; font-size: 0.9rem; display: flex; justify-content: space-between; }
-    .res-bar-bg { height: 8px; background: #000; border-radius: 4px; margin-top: 8px; overflow: hidden; }
-    .res-bar-fill { height: 100%; background: #00ffaa; transition: width 0.1s linear; }
-    .btn { width: 100%; max-width: 400px; padding: 20px; border: none; border-radius: 12px; font-family: 'Orbitron'; font-weight: bold; background: #00ffaa; color: #000; font-size: 1.1rem; margin-top: 10px; }
+    .res-row { margin-top: 15px; background: #151525; padding: 10px; border-radius: 8px; }
+    .bar-bg { height: 12px; background: #000; border-radius: 6px; margin-top: 5px; overflow: hidden; }
+    .bar-fill { height: 100%; width: 0%; transition: width 0.1s linear; background: #00ffaa; }
+    .btn { width: 100%; max-width: 400px; padding: 18px; border: none; border-radius: 12px; font-family: 'Orbitron'; font-weight: bold; background: #00ffaa; color: #000; margin-top: 10px; font-size: 1rem; }
     .btn.stop { background: #ff3366; color: #fff; }
-    .debug-log { font-size: 0.6rem; color: #4a4a70; margin-top: 10px; text-align: center; }
   </style>
   <script src="./edge-impulse-standalone.js"></script>
   <script src="./run-impulse.js"></script>
@@ -27,20 +24,28 @@
   <h1>LOCK DETECTOR</h1>
   
   <div class="card">
-    <div style="font-size: 0.6rem; color: #505080;">INPUT PEAK</div>
+    <div style="font-size: 0.6rem; color: #505080;">INPUT PEAK / WAVEFORM</div>
     <div id="peakVal" class="val-box">0.0000</div>
     <canvas id="waveCanvas"></canvas>
   </div>
 
   <div class="card">
-    <div style="font-size: 0.6rem; color: #505080;">AI CLASSIFICATION RESULTS</div>
-    <div id="resultContainer" class="res-list">
-      <div style="color:#4a4a70; font-size:0.7rem;">Waiting for inference...</div>
+    <div style="font-size: 0.6rem; color: #505080;">AI CLASSIFICATION</div>
+    <div class="res-row">
+      <div style="display:flex; justify-content:space-between; font-family:'Orbitron'; font-size:0.8rem;">
+        <span>LOCK</span><span id="txt-lock">0.0%</span>
+      </div>
+      <div class="bar-bg"><div id="bar-lock" class="bar-fill"></div></div>
+    </div>
+    <div class="res-row">
+      <div style="display:flex; justify-content:space-between; font-family:'Orbitron'; font-size:0.8rem;">
+        <span>NOISE</span><span id="txt-noise">0.0%</span>
+      </div>
+      <div class="bar-bg"><div id="bar-noise" class="bar-fill" style="background:#ff3366;"></div></div>
     </div>
   </div>
 
   <button id="mainBtn" class="btn" onclick="toggle()" disabled>INITIALIZING...</button>
-  <div id="debugStatus" class="debug-log">Engine Loading...</div>
 
 <script>
 let classifier, audioCtx, analyser, processor, sampleBuf = [];
@@ -52,18 +57,15 @@ window.onload = async () => {
         await classifier.init();
         isReady = true;
         document.getElementById('mainBtn').disabled = false;
-        document.getElementById('mainBtn').innerText = 'START MONITORING';
-        document.getElementById('debugStatus').innerText = 'System Ready';
-    } catch (e) {
-        document.getElementById('debugStatus').innerText = 'Error: ' + e.message;
-    }
+        document.getElementById('mainBtn').innerText = 'START';
+    } catch (e) { alert("Engine Error: " + e.message); }
 };
 
 async function toggle() {
     if (!isReady) return;
     if (isRecording) {
         isRecording = false;
-        document.getElementById('mainBtn').innerText = 'START MONITORING';
+        document.getElementById('mainBtn').innerText = 'START';
         document.getElementById('mainBtn').classList.remove('stop');
         if (audioCtx) audioCtx.close();
     } else {
@@ -94,50 +96,38 @@ async function start() {
 
             if (sampleBuf.length >= 16000) {
                 const raw = sampleBuf.slice(-16000);
-                sampleBuf.splice(0, 4000); // 0.25秒分を消化
+                sampleBuf.splice(0, 4000); 
 
-                try {
-                    const res = classifier.classify(new Float32Array(raw));
-                    if (res && res.results) {
-                        updateUI(res.results);
-                    }
-                } catch (err) { console.error(err); }
+                // AI推論
+                const res = classifier.classify(new Float32Array(raw));
+                
+                // 結果の取り出し (Edge Impulseのバージョンによる名称の違いを両方カバー)
+                const results = res.results || res.classification;
+                
+                if (results) {
+                    Object.keys(results).forEach(key => {
+                        const r = results[key];
+                        // r が {label: "lock", value: 0.9} のようなオブジェクトの場合
+                        const label = (r.label || key).toLowerCase();
+                        const val = (r.value || r); 
+                        const pct = (val * 100).toFixed(1) + '%';
+
+                        if (label.includes('lock')) {
+                            document.getElementById('bar-lock').style.width = pct;
+                            document.getElementById('txt-lock').innerText = pct;
+                        } else if (label.includes('noise')) {
+                            document.getElementById('bar-noise').style.width = pct;
+                            document.getElementById('txt-noise').innerText = pct;
+                        }
+                    });
+                }
             }
         };
-
         isRecording = true;
         document.getElementById('mainBtn').innerText = 'STOP';
         document.getElementById('mainBtn').classList.add('stop');
         draw();
-    } catch (e) { alert("Mic Error: " + e.message); }
-}
-
-function updateUI(results) {
-    const container = document.getElementById('resultContainer');
-    container.innerHTML = ''; // 一旦クリア
-
-    results.forEach(r => {
-        const pct = (r.value * 100).toFixed(1);
-        const item = document.createElement('div');
-        item.className = 'res-item';
-        // LOCKという文字が含まれるラベルだけ色を変える（大文字小文字無視）
-        if (r.label.toUpperCase().includes('LOCK')) {
-            item.style.borderLeftColor = '#00ffaa';
-        } else {
-            item.style.borderLeftColor = '#ff3366';
-        }
-
-        item.innerHTML = `
-            <div class="res-label">
-                <span>${r.label.toUpperCase()}</span>
-                <span>${pct}%</span>
-            </div>
-            <div class="res-bar-bg">
-                <div class="res-bar-fill" style="width: ${pct}%; background: ${item.style.borderLeftColor};"></div>
-            </div>
-        `;
-        container.appendChild(item);
-    });
+    } catch (e) { alert(e.message); }
 }
 
 function draw() {
