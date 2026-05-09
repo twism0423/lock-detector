@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Lock Detector v5</title>
+<title>Lock Detector v6</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Teko:wght@400;600&display=swap');
   :root{
@@ -26,9 +26,8 @@
   .status-bar{background:var(--surface);border:1px solid var(--border);border-radius:8px;
     padding:8px 12px;display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;font-size:10px}
   .si{display:flex;justify-content:space-between}
-  .si .k{color:var(--muted)}
-  .si .v{color:var(--accent);font-weight:bold}
-  .si .v.ok{color:var(--green)}.si .v.err{color:var(--red)}.si .v.warn{color:var(--yellow)}
+  .si .k{color:var(--muted)}.si .v{color:var(--accent);font-weight:bold}
+  .si .v.ok{color:var(--green)}.si .v.er{color:var(--red)}.si .v.wa{color:var(--yellow)}
   #btn{width:100%;padding:20px;font-family:var(--font-head);font-size:22px;font-weight:600;
     letter-spacing:3px;border:2px solid var(--border);border-radius:10px;
     background:var(--surface);color:var(--muted);cursor:not-allowed;transition:all .25s}
@@ -36,7 +35,9 @@
     box-shadow:0 0 20px rgba(0,212,255,.15)}
   #btn.recording{border-color:var(--red);color:var(--red);
     animation:pb 1.6s ease-in-out infinite}
-  @keyframes pb{0%,100%{box-shadow:0 0 20px rgba(255,59,48,.2)}50%{box-shadow:0 0 35px rgba(255,59,48,.4)}}
+  @keyframes pb{
+    0%,100%{box-shadow:0 0 20px rgba(255,59,48,.2)}
+    50%{box-shadow:0 0 35px rgba(255,59,48,.4)}}
   .meter-wrap{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--muted)}
   .meter-bar{flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden}
   .meter-fill{height:100%;width:0%;background:var(--green);border-radius:3px;transition:width .06s}
@@ -45,49 +46,49 @@
   .score-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;
     padding:14px 12px 10px;text-align:center;transition:border-color .3s,box-shadow .3s;
     position:relative;overflow:hidden}
-  .score-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;
-    background:var(--border);transition:background .3s}
+  .score-card::after{content:'';position:absolute;bottom:0;left:0;right:0;
+    height:3px;background:var(--border);transition:background .3s}
   .score-card.al{border-color:var(--lock-col);box-shadow:0 0 18px rgba(0,212,255,.2)}
   .score-card.al::after{background:var(--lock-col)}
   .score-card.an{border-color:var(--noise-col);box-shadow:0 0 18px rgba(255,107,53,.2)}
   .score-card.an::after{background:var(--noise-col)}
-  .score-label{font-size:11px;letter-spacing:2px;color:var(--muted);margin-bottom:6px}
-  .score-value{font-family:var(--font-head);font-size:42px;font-weight:600;line-height:1;
-    color:var(--muted);transition:color .3s}
+  .score-label{font-size:11px;letter-spacing:2px;color:var(--muted);margin-bottom:6px;text-transform:uppercase}
+  .score-value{font-family:var(--font-head);font-size:48px;font-weight:600;
+    line-height:1;color:var(--muted);transition:color .3s}
   .al .score-value{color:var(--lock-col)}.an .score-value{color:var(--noise-col)}
   .score-bar-wrap{margin-top:8px;height:3px;background:var(--border);border-radius:2px;overflow:hidden}
-  .score-bar-fill{height:100%;width:0%;border-radius:2px;transition:width .3s}
+  .score-bar-fill{height:100%;width:0%;border-radius:2px;transition:width .25s ease}
   .cl .score-bar-fill{background:var(--lock-col)}.cn .score-bar-fill{background:var(--noise-col)}
-  .verdict{text-align:center;padding:10px;border-radius:8px;font-family:var(--font-head);
-    font-size:18px;font-weight:600;letter-spacing:3px;background:var(--surface);
-    border:1px solid var(--border);color:var(--muted);transition:all .3s;
-    min-height:46px;display:flex;align-items:center;justify-content:center;gap:8px}
+  .verdict{text-align:center;padding:12px;border-radius:8px;
+    font-family:var(--font-head);font-size:20px;font-weight:600;letter-spacing:3px;
+    background:var(--surface);border:1px solid var(--border);color:var(--muted);
+    transition:all .3s;min-height:50px;display:flex;align-items:center;justify-content:center;gap:8px}
   .verdict.lock{background:rgba(0,212,255,.08);border-color:var(--lock-col);color:var(--lock-col)}
   .verdict.noise{background:rgba(255,107,53,.08);border-color:var(--noise-col);color:var(--noise-col)}
   .log-header{display:flex;justify-content:space-between;align-items:center;
     color:var(--muted);font-size:10px;padding:0 2px}
   .log-clear{background:none;border:1px solid var(--border);color:var(--muted);
     font-family:var(--font-ui);font-size:10px;cursor:pointer;padding:2px 6px;border-radius:4px}
-  #log{background:#050810;border:1px solid var(--border);border-radius:8px;height:240px;
-    overflow-y:auto;padding:8px 10px;font-size:10px;line-height:1.7;flex:1}
-  #log .ok{color:#3fb950}#log .wa{color:var(--yellow)}#log .er{color:var(--red)}
-  #log .in{color:var(--muted)}#log .re{color:var(--accent)}
+  #log{background:#050810;border:1px solid var(--border);border-radius:8px;
+    height:200px;overflow-y:auto;padding:8px 10px;font-size:10px;line-height:1.7}
+  #log .ok{color:#3fb950}#log .wa{color:var(--yellow)}
+  #log .er{color:var(--red)}#log .in{color:var(--muted)}#log .re{color:var(--accent)}
 </style>
-<!-- キャッシュバイパス: デプロイのたびに ?v= の数字を上げる -->
-<script src="./edge-impulse-standalone.js?v=5"></script>
-<script src="./run-impulse.js?v=5"></script>
+<script src="./edge-impulse-standalone.js?v=6"></script>
+<script src="./run-impulse.js?v=6"></script>
 </head>
 <body>
+
 <header>
   <div class="lock-icon">🔒</div>
   <div><h1>LOCK<span>SCAN</span></h1></div>
-  <div class="version">v5 / Safari Fix<br>+ Auto Patch</div>
+  <div class="version">v6 FINAL<br>48kHz Fixed</div>
 </header>
 
 <div class="status-bar">
   <div class="si"><span class="k">DEVICE SR</span><span class="v" id="s-dsr">---</span></div>
   <div class="si"><span class="k">MODEL SR</span><span class="v" id="s-msr">---</span></div>
-  <div class="si"><span class="k">INPUT SIZE</span><span class="v" id="s-ins">---</span></div>
+  <div class="si"><span class="k">WINDOW</span><span class="v" id="s-win">---</span></div>
   <div class="si"><span class="k">ENGINE</span><span class="v" id="s-eng">LOADING</span></div>
 </div>
 
@@ -111,54 +112,40 @@
 <script>
 'use strict';
 
-// ── 設定 ────────────────────────────────────────────
-const CFG = {
-  MODEL_SR:    16000,
-  WINDOW_SIZE: 16000,
-  OVERLAP:     0.5,
-  PROC_BUF:    4096,
-  LOG_MAX:     200,
-};
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// モデル設定（props から自動取得するので変更不要）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let MODEL_SR    = 48000;  // getProperties().frequency で上書き
+let WINDOW_SIZE = 48000;  // getProperties().frame_sample_count で上書き
+let SLIDE_SIZE  = 12000;  // getProperties().slice_size で上書き
 
-const EI_ERR = {
-  '-1':'SHAPES_DONT_MATCH','-3':'TFLITE_ERROR','-5':'DSP_ERROR',
-  '-6':'INVALID_SIZE','-7':'ALLOC_FAILED','-17':'INFERENCE_ERROR',
-  '-23':'INPUT_SIGNAL_ERROR','-24':'SAMPLING_ERROR',
-};
+const PROC_BUF = 4096;
+const LOG_MAX  = 150;
 
-// ── ユーティリティ ────────────────────────────────────
 const $ = id => document.getElementById(id);
 let logN = 0;
 
 function log(msg, cls='ok'){
-  const box=$('log'), t=new Date().toLocaleTimeString('ja-JP',{hour12:false});
+  const box=$('log');
+  const t=new Date().toLocaleTimeString('ja-JP',{hour12:false});
   const d=document.createElement('div');
   d.className=cls; d.textContent=`[${t}] ${msg}`;
   box.appendChild(d); box.scrollTop=box.scrollHeight;
-  if(++logN>CFG.LOG_MAX){box.removeChild(box.firstChild);logN--;}
+  if(++logN>LOG_MAX){box.removeChild(box.firstChild);logN--;}
 }
 function clearLog(){$('log').innerHTML='';logN=0;}
 function setStat(id,v,c=''){const e=$(id);e.textContent=v;e.className='v'+(c?' '+c:'');}
 
-function resample(inp, fSR, tSR){
-  if(fSR===tSR) return new Float32Array(inp);
-  const r=fSR/tSR, n=Math.round(inp.length/r), o=new Float32Array(n);
-  for(let i=0;i<n;i++){
-    const p=i*r,k=Math.floor(p),f=p-k;
-    o[i]=(k+1<inp.length)?inp[k]*(1-f)+inp[k+1]*f:inp[k];
-  }
-  return o;
-}
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// スコアカード
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let knownLabels=[];
 
-// ── 状態 ─────────────────────────────────────────────
-let classifier=null, actualSR=CFG.MODEL_SR, modelInputSize=CFG.WINDOW_SIZE;
-let sampleBuf=[], isClassifying=false, isRecording=false, knownLabels=[];
-
-// ── スコアカード ──────────────────────────────────────
 function lc(label){
-  const u=label.toUpperCase();
-  return u.includes('LOCK')?'lock':u.includes('NOISE')?'noise':'other';
+  const u=label.toLowerCase();
+  return u.includes('lock')?'lock':u.includes('noise')?'noise':'other';
 }
+
 function buildCards(labels){
   knownLabels=labels;
   $('score-cards').innerHTML=labels.map(lb=>{
@@ -166,154 +153,113 @@ function buildCards(labels){
     return `<div class="score-card c${c[0]}" id="card-${lb}">
       <div class="score-label">${lb}</div>
       <div class="score-value" id="val-${lb}">--%</div>
-      <div class="score-bar-wrap"><div class="score-bar-fill" id="bar-${lb}"></div></div>
+      <div class="score-bar-wrap">
+        <div class="score-bar-fill" id="bar-${lb}"></div>
+      </div>
     </div>`;
   }).join('');
 }
-function updateCards(res){
-  const w=res.reduce((a,b)=>a.value>b.value?a:b);
-  res.forEach(r=>{
+
+function updateCards(results){
+  const w=results.reduce((a,b)=>a.value>b.value?a:b);
+  results.forEach(r=>{
     const p=(r.value*100).toFixed(1);
-    const v=$(`val-${r.label}`), b=$(`bar-${r.label}`), c=$(`card-${r.label}`);
-    if(!v) return;
-    v.textContent=p+'%'; b.style.width=p+'%';
-    c.classList.remove('al','an');
-    if(r.label===w.label) c.classList.add(lc(r.label)==='lock'?'al':'an');
+    const ve=$(`val-${r.label}`), be=$(`bar-${r.label}`), ce=$(`card-${r.label}`);
+    if(!ve) return;
+    ve.textContent=p+'%';
+    be.style.width=p+'%';
+    ce.classList.remove('al','an');
+    if(r.label===w.label) ce.classList.add(lc(r.label)==='lock'?'al':'an');
   });
   const vd=$('verdict'), wc=lc(w.label);
   vd.className='verdict '+wc;
-  vd.innerHTML=(wc==='lock'?'🔒':'🔊')+' '+w.label
+  vd.innerHTML=(wc==='lock'?'🔒':'🔊')+' '
+    +w.label.toUpperCase()
     +`<small style="font-size:14px;opacity:.7"> ${(w.value*100).toFixed(1)}%</small>`;
 }
 
-// ────────────────────────────────────────────────────
-//  run-impulse.js の classify() を解析してパッチを当てる
-//  -24 の原因はほぼここにある
-// ────────────────────────────────────────────────────
-function analyzeAndPatch(clf){
-  const src = clf.classify.toString();
-  log('=== classify() 実装解析 ===','in');
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 初期化
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let classifier=null;
 
-  // どのパターンか判定してログ
-  const usesHeap      = src.includes('HEAPF32') || src.includes('HEAPU8') || src.includes('_malloc');
-  const usesAddFunc   = src.includes('addFunction');
-  const usesSignal    = src.includes('Signal') || src.includes('signal');
-  const usesSlice     = src.includes('.slice') || src.includes('subarray');
-  const isAsync       = src.includes('async') || src.includes('Promise');
-
-  log(`  Heap直接操作 : ${usesHeap}`,  'in');
-  log(`  addFunction  : ${usesAddFunc}`,'in');
-  log(`  Signalオブジェクト: ${usesSignal}`,'in');
-  log(`  slice/subarray: ${usesSlice}`, 'in');
-  log(`  async        : ${isAsync}`,   'in');
-
-  // classify の最初の300文字をログ（デバッグ用）
-  log('src(0-300): '+src.substring(0,300),'in');
-
-  // ── パッチ戦略 ──────────────────────────────────
-  // Heapを使う実装（最も一般的）では Float32Array を WASM ヒープに
-  // コピーしてから呼ぶのが正しい。Safari でのデタッチ問題を回避するため
-  // ヒープコピーを強制する版でラップする。
-  const origClassify = clf.classify.bind(clf);
-
-  clf.classify = function patchedClassify(rawData, debug=false){
-    // 1. 必ずプレーンな Float32Array にする（Safari の ArrayBuffer デタッチ対策）
-    const f32 = (rawData instanceof Float32Array)
-      ? rawData.slice()          // コピーを作る（元バッファのデタッチ防止）
-      : new Float32Array(rawData); // Array / Int16 → Float32
-
-    // 2. WASM Heap が使える環境では直接コピーして渡す
-    if(typeof Module !== 'undefined' && Module._malloc){
-      try{
-        const bytes  = f32.length * 4;
-        const ptr    = Module._malloc(bytes);
-        // HEAPF32 は WASM メモリ成長で無効化されることがある → 毎回 new で取得
-        new Float32Array(Module.HEAPF32.buffer, ptr, f32.length).set(f32);
-        let obj;
-        // run_classifier の署名はSDKによって異なる
-        if(typeof Module.run_classifier === 'function'){
-          obj = Module.run_classifier(ptr, f32.length, debug);
-        }else{
-          // 署名が違う場合は元の classify に heap バッファを渡す
-          const heapArr = new Float32Array(Module.HEAPF32.buffer, ptr, f32.length);
-          obj = origClassify(heapArr, debug);
-        }
-        Module._free(ptr);
-        return obj;
-      }catch(heapErr){
-        log('Heapパッチ失敗: '+heapErr.message+' → 元実装にフォールバック','wa');
-      }
-    }
-
-    // 3. Module が使えない場合: Array.from() で通常配列として渡す
-    try{
-      return origClassify(Array.from(f32), debug);
-    }catch(e){
-      // 4. 最終手段: 元の実装をそのまま呼ぶ
-      return origClassify(f32, debug);
-    }
-  };
-
-  log('✅ classify() パッチ適用完了','ok');
-}
-
-// ── 初期化 ────────────────────────────────────────────
 window.addEventListener('load', async()=>{
   log('▶ 初期化開始...');
   try{
-    classifier = new EdgeImpulseClassifier();
+    classifier=new EdgeImpulseClassifier();
     await classifier.init();
 
-    let props={};
-    if(typeof classifier.getProperties==='function') props=classifier.getProperties();
+    const props = typeof classifier.getProperties==='function'
+      ? classifier.getProperties() : {};
+
     log('✅ 初期化成功');
     log('props='+JSON.stringify(props),'in');
 
-    modelInputSize = props.inputSize??props.signal_length??props.frame_sample_count??CFG.WINDOW_SIZE;
-    const msr = props.frequency??props.sampleRate??CFG.MODEL_SR;
+    // ★ モデルの実際の値で上書き（今回の核心）
+    MODEL_SR    = props.frequency          || 48000;
+    WINDOW_SIZE = props.frame_sample_count || 48000;
+    SLIDE_SIZE  = props.slice_size         || Math.round(WINDOW_SIZE * 0.25);
 
-    setStat('s-msr', msr,            'ok');
-    setStat('s-ins', modelInputSize, 'ok');
-    setStat('s-eng', 'READY',        'ok');
+    const labels = props.labels || props.model_output_names || [];
 
-    const labels = props.labels??props.model_output_names??[];
-    if(labels.length>0){buildCards(labels);log('ラベル: '+labels.join(' / '),'in');}
+    setStat('s-msr', MODEL_SR+'Hz',    'ok');
+    setStat('s-win', WINDOW_SIZE+'smp','ok');
+    setStat('s-eng', 'READY',          'ok');
 
-    // ★ classify() を解析してパッチを当てる
-    analyzeAndPatch(classifier);
+    if(labels.length>0){
+      buildCards(labels);
+      log('ラベル: '+labels.join(' / '),'in');
+    }
 
     const btn=$('btn');
-    btn.disabled=false; btn.textContent='▶  START RECORDING'; btn.className='ready';
+    btn.disabled=false;
+    btn.textContent='▶  START RECORDING';
+    btn.className='ready';
   }catch(e){
     log('❌ 初期化失敗: '+e.message,'er');
-    setStat('s-eng','ERROR','err');
+    setStat('s-eng','ERROR','er');
   }
 });
 
-// ── 録音開始 ──────────────────────────────────────────
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 録音開始
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let sampleBuf=[], isClassifying=false, isRecording=false;
+
 async function startRecording(){
   if(isRecording||!classifier) return;
   const btn=$('btn'); btn.disabled=true;
   try{
-    log('▶ AudioContext 作成...');
+    // Safari Fix: sampleRate 指定なし → 実機のデフォルト（48000）をそのまま使う
     const audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-    if(audioCtx.state==='suspended'){await audioCtx.resume();log('resume()完了','in');}
+    if(audioCtx.state==='suspended'){
+      await audioCtx.resume();
+      log('AudioContext resume()','in');
+    }
 
-    actualSR=audioCtx.sampleRate;
-    setStat('s-dsr', actualSR, actualSR===CFG.MODEL_SR?'ok':'warn');
-    log(`SR: ${actualSR}Hz → ${CFG.MODEL_SR}Hz へリサンプル`);
+    const deviceSR=audioCtx.sampleRate;
+    setStat('s-dsr', deviceSR+'Hz', deviceSR===MODEL_SR?'ok':'wa');
+    log(`DEVICE SR: ${deviceSR}Hz / MODEL SR: ${MODEL_SR}Hz`);
+
+    // デバイスSRとモデルSRが一致 → リサンプリング不要
+    if(deviceSR!==MODEL_SR){
+      log(`⚠ SRミスマッチ: リサンプリングを適用 (${deviceSR}→${MODEL_SR})`,'wa');
+    }
 
     const stream=await navigator.mediaDevices.getUserMedia({audio:true});
     log('✅ マイク取得成功');
 
-    const src=audioCtx.createMediaStreamSource(stream);
-    const proc=audioCtx.createScriptProcessor(CFG.PROC_BUF,1,1);
-    const target=Math.round(modelInputSize*actualSR/CFG.MODEL_SR);
-    const slide=Math.round(target*(1-CFG.OVERLAP));
-    log(`バッファ: ${target}smp / スライド: ${slide}smp`,'in');
+    const src  = audioCtx.createMediaStreamSource(stream);
+    const proc = audioCtx.createScriptProcessor(PROC_BUF,1,1);
+
+    // デバイスSRで何サンプル集めればモデルの1窓になるか
+    const targetSamples = Math.round(WINDOW_SIZE * deviceSR / MODEL_SR);
+    const slideStep     = Math.round(SLIDE_SIZE  * deviceSR / MODEL_SR);
+    log(`窓: ${targetSamples}smp / スライド: ${slideStep}smp`,'in');
 
     proc.onaudioprocess=(e)=>{
       const chunk=e.inputBuffer.getChannelData(0);
+      // レベルメーター
       let pk=0;
       for(let i=0;i<chunk.length;i++){const a=Math.abs(chunk[i]);if(a>pk)pk=a;}
       const pct=Math.min(100,pk*200);
@@ -321,77 +267,100 @@ async function startRecording(){
       fill.style.width=pct+'%';
       fill.className='meter-fill'+(pct>90?' clip':pct>65?' hot':'');
       $('peak-val').textContent=pk.toFixed(3);
+
       for(let i=0;i<chunk.length;i++) sampleBuf.push(chunk[i]);
-      if(sampleBuf.length>=target&&!isClassifying){
-        const win=new Float32Array(sampleBuf.slice(0,target));
-        sampleBuf=sampleBuf.slice(slide);
-        setTimeout(()=>runInference(win),0);
+
+      if(sampleBuf.length>=targetSamples&&!isClassifying){
+        const win=new Float32Array(sampleBuf.slice(0,targetSamples));
+        sampleBuf=sampleBuf.slice(slideStep);
+        // Safari Fix: オーディオスレッドから切り離す
+        setTimeout(()=>runInference(win,deviceSR),0);
       }
     };
-    src.connect(proc); proc.connect(audioCtx.destination);
+
+    src.connect(proc);
+    proc.connect(audioCtx.destination);
     isRecording=true;
-    btn.textContent='⏺  RECORDING...'; btn.className='recording';
+    btn.textContent='⏺  RECORDING...';
+    btn.className='recording';
     log('🎤 監視開始');
   }catch(e){
     log('❌ 録音エラー: '+e.message,'er');
-    btn.disabled=false; btn.textContent='▶  RETRY'; btn.className='ready';
+    btn.disabled=false;
+    btn.textContent='▶  RETRY';
+    btn.className='ready';
   }
 }
 
-// ── 推論 ─────────────────────────────────────────────
-async function runInference(rawChunk){
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 推論
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function resample(input, fromSR, toSR){
+  if(fromSR===toSR) return input;
+  const ratio=fromSR/toSR, n=Math.round(input.length/ratio), o=new Float32Array(n);
+  for(let i=0;i<n;i++){
+    const p=i*ratio,k=Math.floor(p),f=p-k;
+    o[i]=(k+1<input.length)?input[k]*(1-f)+input[k+1]*f:input[k];
+  }
+  return o;
+}
+
+async function runInference(rawChunk, deviceSR){
   isClassifying=true;
   try{
-    const resampled=resample(rawChunk,actualSR,CFG.MODEL_SR);
-    const peak=Math.max(...resampled.map(Math.abs));
-    if(peak<0.001){log('⚠ 無音','wa');return;}
+    // リサンプリング（SR が一致する場合はそのまま）
+    const data = resample(rawChunk, deviceSR, MODEL_SR);
+    const peak = Math.max(...data.map(Math.abs));
 
-    log(`classify() [${resampled.length}smp peak=${peak.toFixed(4)}]`,'in');
+    if(peak<0.001){log('⚠ 無音 — マイクを確認してください','wa');return;}
+    log(`classify() ${data.length}smp peak=${peak.toFixed(4)}`,'in');
+
+    // ★ Array.from() で通常配列に変換（TypedArrayのまま渡すとSafariでerr -24）
+    const inputArray=Array.from(data);
 
     let res;
     try{
-      // パッチ済みclassifyを呼ぶ（内部でHeap/Array.from を試みる）
-      res=classifier.classify(resampled);
+      res=classifier.classify(inputArray);
     }catch(e1){
-      const c=(e1.message.match(/-?\d+/)??['?'])[0];
-      log(`❌ [code:${c}=${EI_ERR[c]??'不明'}] ${e1.message}`,'er');
-      if(c==='-24') log('→ 上の解析ログを確認・共有してください','wa');
-      return;
+      // フォールバック: Float32Array で再試行
+      log('Array失敗→Float32再試行: '+e1.message,'wa');
+      res=classifier.classify(data);
     }
 
     log('RAW: '+JSON.stringify(res),'in');
 
-    // 結果パース
+    // 結果パース（SDK バージョン対応）
     let results=null;
     if(Array.isArray(res?.results))
       results=res.results.map(r=>({label:r.label,value:r.value}));
     else if(res?.classification&&typeof res.classification==='object')
       results=Object.entries(res.classification).map(([l,v])=>({label:l,value:v}));
     else if(typeof res==='object'&&res!==null){
-      const f=Object.entries(res).filter(([,v])=>typeof v==='number').map(([l,v])=>({label:l,value:v}));
+      const f=Object.entries(res)
+        .filter(([,v])=>typeof v==='number')
+        .map(([l,v])=>({label:l,value:v}));
       if(f.length) results=f;
     }
 
-    if(!results||!results.length){log('⚠ 結果形式不明: '+JSON.stringify(res),'wa');return;}
+    if(!results||!results.length){
+      log('⚠ 結果形式不明: '+JSON.stringify(res),'wa');
+      return;
+    }
+
     if(!knownLabels.length) buildCards(results.map(r=>r.label));
     updateCards(results);
+
     results.sort((a,b)=>b.value-a.value).forEach(r=>{
       const bar='█'.repeat(Math.round(r.value*20)).padEnd(20,'░');
       log(`  ${r.label.padEnd(8)} ${(r.value*100).toFixed(1).padStart(5)}% |${bar}|`,'re');
     });
+
+  }catch(e){
+    log('❌ 推論エラー: '+e.message,'er');
   }finally{
     isClassifying=false;
   }
 }
-
-// コンソール用デバッグ
-window.__dbg=()=>{
-  console.group('EI Debug v5');
-  console.log('props:',classifier?.getProperties?.());
-  console.log('classify:',classifier?.classify?.toString());
-  console.log('Module keys:',typeof Module!=='undefined'?Object.keys(Module).filter(k=>k.includes('run')).join(','):'N/A');
-  console.groupEnd();
-};
 </script>
 </body>
 </html>
