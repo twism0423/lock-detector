@@ -2,153 +2,291 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AI LOCK DETECTOR PRO</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edge Impulse - iPad Fix</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
-        :root { --bg: #05050a; --accent: #00ffaa; --warn: #ff3366; --panel: #0f0f1f; --text: #d0d0e8; }
-        body { background: var(--bg); color: var(--text); font-family: sans-serif; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 20px; margin: 0; }
-        .container { width: 100%; max-width: 400px; }
-        h1 { font-family: 'Orbitron', sans-serif; font-size: 1.1rem; color: var(--accent); text-align: center; margin-bottom: 20px; letter-spacing: 3px; }
-        .monitor { background: var(--panel); border: 1px solid #1a1a30; border-radius: 12px; padding: 15px; margin-bottom: 15px; }
-        .label { font-size: 0.6rem; color: #505080; margin-bottom: 5px; }
-        .val { font-family: 'Orbitron', monospace; font-size: 1.2rem; color: #fff; margin-bottom: 10px; }
-        canvas { width: 100%; height: 60px; background: #000; border-radius: 6px; }
-        .results { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
-        .res-row { background: var(--panel); padding: 12px; border-radius: 8px; border: 1px solid #1a1a30; }
-        .bar-bg { height: 10px; background: #000; border-radius: 5px; margin-top: 8px; overflow: hidden; }
-        .bar-fill { height: 100%; width: 0%; transition: width 0.1s linear; background: var(--accent); }
-        .btn { width: 100%; padding: 18px; border: none; border-radius: 12px; font-family: 'Orbitron'; font-weight: bold; background: var(--accent); color: #000; font-size: 1rem; margin-top: 15px; }
-        .btn.stop { background: var(--warn); color: #fff; }
+        body { background: #0d1117; color: #c9d1d9; font-family: monospace; padding: 12px; font-size: 12px; }
+        h2 { color: #58a6ff; }
+        .status-bar { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 10px; margin: 8px 0; font-size: 11px; }
+        .status-bar span { color: #58a6ff; font-weight: bold; }
+        .log { background: #0d1117; color: #3fb950; height: 380px; overflow-y: auto; padding: 10px;
+               border: 1px solid #238636; border-radius: 6px; margin-top: 8px; }
+        .log .err  { color: #f85149; }
+        .log .warn { color: #d29922; }
+        .log .good { color: #3fb950; }
+        .log .result { color: #79c0ff; font-weight: bold; }
+        .btn { width: 100%; padding: 22px; font-size: 17px; font-weight: bold;
+               background: #238636; color: white; border: none; border-radius: 8px;
+               cursor: pointer; transition: background 0.2s; }
+        .btn:disabled { background: #21262d; color: #8b949e; cursor: not-allowed; }
+        .btn.recording { background: #da3633; }
+        .meter { height: 8px; background: #21262d; border-radius: 4px; margin-top: 6px; overflow: hidden; }
+        .meter-fill { height: 100%; width: 0%; background: #3fb950; transition: width 0.1s; border-radius: 4px; }
     </style>
+
+    <!--
+        ⚠️ iPad Safariキャッシュ対策:
+        GitHub Pagesのキャッシュを強制バイパスするため、
+        実運用では以下のようにバージョンクエリを付けてください:
+        <script src="./edge-impulse-standalone.js?v=20240601"></script>
+    -->
     <script src="./edge-impulse-standalone.js"></script>
     <script src="./run-impulse.js"></script>
 </head>
 <body>
-    <div class="container">
-        <h1>LOCK DETECTOR</h1>
-        
-        <div class="monitor">
-            <div class="label">INPUT PEAK LEVEL</div>
-            <div id="peakVal" class="val">0.0000</div>
-            <canvas id="waveCanvas"></canvas>
-        </div>
+    <h2>Edge Impulse Classifier</h2>
 
-        <div class="results">
-            <div class="res-row">
-                <div style="display:flex; justify-content:space-between; font-family:'Orbitron'; font-size:0.8rem;">
-                    <span>LOCK</span><span id="txt-lock">0.0%</span>
-                </div>
-                <div class="bar-bg"><div id="bar-lock" class="bar-fill"></div></div>
-            </div>
-            <div class="res-row">
-                <div style="display:flex; justify-content:space-between; font-family:'Orbitron'; font-size:0.8rem;">
-                    <span>NOISE</span><span id="txt-noise">0.0%</span>
-                </div>
-                <div class="bar-bg"><div id="bar-noise" class="bar-fill" style="background:var(--warn);"></div></div>
-            </div>
-        </div>
-
-        <button id="mainBtn" class="btn" onclick="toggle()" disabled>INITIALIZING...</button>
+    <div class="status-bar">
+        AudioContext SR: <span id="sr-display">---</span> Hz　/
+        実効SR: <span id="eff-sr-display">---</span> Hz　/
+        状態: <span id="state-display">初期化中</span>
     </div>
 
-<script>
-let classifier, audioCtx, analyser, processor, sampleBuf = [];
-let isReady = false, isRecording = false;
+    <button id="btn" class="btn" onclick="startRecording()" disabled>
+        AIエンジン読み込み中...
+    </button>
 
-window.onload = async () => {
+    <div class="meter"><div class="meter-fill" id="meter"></div></div>
+
+    <div id="log" class="log">ログ開始...<br></div>
+
+<script>
+// ============================================================
+// 設定値 — Edge Impulseのプロジェクト設定に合わせてください
+// ============================================================
+const MODEL_SAMPLE_RATE   = 16000;  // Edge Impulseプロジェクトのサンプルレート
+const MODEL_WINDOW_SIZE   = 16000;  // 推論に使うサンプル数 (= 1秒 × SR)
+const SLIDE_OVERLAP_RATIO = 0.5;    // スライドウィンドウのオーバーラップ率
+const SCRIPT_PROC_BUFFER  = 4096;   // ScriptProcessorバッファサイズ
+
+// ============================================================
+// ユーティリティ
+// ============================================================
+const $ = id => document.getElementById(id);
+
+function log(msg, cls = 'good') {
+    const box = $('log');
+    const t   = new Date().toLocaleTimeString('ja-JP', { hour12: false });
+    box.innerHTML += `<div class="${cls}">[${t}] ${msg}</div>`;
+    box.scrollTop  = box.scrollHeight;
+}
+
+/** Float32 [-1,1] → Int16 [-32768,32767] */
+function float32ToInt16(buf) {
+    const out = new Int16Array(buf.length);
+    for (let i = 0; i < buf.length; i++) {
+        const s = Math.max(-1, Math.min(1, buf[i]));
+        out[i]  = s < 0 ? s * 32768 : s * 32767;
+    }
+    return out;
+}
+
+/**
+ * 線形補間によるダウンサンプリング
+ * Safari は sampleRate:16000 を無視して 44100/48000 Hz で動くため必須
+ */
+function resample(input, fromSR, toSR) {
+    if (fromSR === toSR) return input;
+    const ratio  = fromSR / toSR;
+    const outLen = Math.round(input.length / ratio);
+    const output = new Float32Array(outLen);
+    for (let i = 0; i < outLen; i++) {
+        const pos  = i * ratio;
+        const idx  = Math.floor(pos);
+        const frac = pos - idx;
+        output[i]  = (idx + 1 < input.length)
+            ? input[idx] * (1 - frac) + input[idx + 1] * frac
+            : input[idx];
+    }
+    return output;
+}
+
+// ============================================================
+// グローバル状態
+// ============================================================
+let classifier       = null;
+let audioCtx         = null;
+let actualSampleRate = MODEL_SAMPLE_RATE;
+let sampleBuf        = [];          // Float32生バッファ（実機SR）
+let isClassifying    = false;       // 推論中フラグ（多重実行防止）
+let isRecording      = false;
+
+// ============================================================
+// 初期化
+// ============================================================
+window.addEventListener('load', async () => {
+    log("▶ EdgeImpulseClassifier 初期化開始...");
     try {
         classifier = new EdgeImpulseClassifier();
         await classifier.init();
-        isReady = true;
-        document.getElementById('mainBtn').disabled = false;
-        document.getElementById('mainBtn').innerText = 'START';
-    } catch (e) { alert("Error: " + e.message); }
-};
 
-async function toggle() {
-    if (!isReady) return;
-    isRecording ? stop() : await start();
-}
+        // モデルのプロパティを取得（あれば）
+        let props = {};
+        if (typeof classifier.getProperties === 'function') {
+            props = classifier.getProperties();
+        }
+        log("✅ 初期化成功 props=" + JSON.stringify(props));
 
-async function start() {
+        // ラベル一覧を事前確認（後の推論結果パース用）
+        if (props.label_count || props.labels) {
+            log("ラベル: " + (props.labels || []).join(', '));
+        }
+
+        $('btn').disabled  = false;
+        $('btn').innerText = '🎤 録音開始';
+        $('state-display').textContent = '待機中';
+    } catch (e) {
+        log("❌ 初期化失敗: " + e.message, 'err');
+        log("スタック: " + (e.stack || '—'), 'err');
+    }
+});
+
+// ============================================================
+// 録音開始（ユーザー操作から呼ぶ必要あり ← Safari要件）
+// ============================================================
+async function startRecording() {
+    if (isRecording) return;
+
     try {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        log("▶ AudioContext 作成中...");
+
+        // 【Safari Fix 1】
+        // sampleRate オプションを渡すと Safari が固まることがあるため
+        // ここでは指定しない → 実際のSRを確認してソフトウェアリサンプルする
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // 【Safari Fix 2】
+        // ユーザー操作直後でも suspended になることがある
+        if (audioCtx.state === 'suspended') {
+            log("AudioContext が suspended → resume() 実行", 'warn');
+            await audioCtx.resume();
+        }
+
+        actualSampleRate = audioCtx.sampleRate;
+        $('sr-display').textContent     = actualSampleRate;
+        $('eff-sr-display').textContent = MODEL_SAMPLE_RATE;
+        log(`AudioContext SR: ${actualSampleRate} Hz (モデル要求: ${MODEL_SAMPLE_RATE} Hz)`);
+
+        if (actualSampleRate !== MODEL_SAMPLE_RATE) {
+            log(`⚠️ SRミスマッチ → リサンプリング有効`, 'warn');
+        }
+
+        // マイク取得
+        // 【Safari Fix 3】getUserMedia の audio 制約は最小限にする
+        // echoCancellation 等を false にすると Safari で失敗する端末がある
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const source = audioCtx.createMediaStreamSource(stream);
-        analyser = audioCtx.createAnalyser();
-        processor = audioCtx.createScriptProcessor(4096, 1, 1);
-        
-        source.connect(analyser);
-        processor.connect(audioCtx.destination);
-        source.connect(processor);
+        log("✅ マイクアクセス成功");
+
+        const source    = audioCtx.createMediaStreamSource(stream);
+        const processor = audioCtx.createScriptProcessor(SCRIPT_PROC_BUFFER, 1, 1);
+
+        // 実機SRで「1秒分」に相当するサンプル数
+        const targetBufSamples = Math.round(MODEL_WINDOW_SIZE * actualSampleRate / MODEL_SAMPLE_RATE);
+        const slideStep        = Math.round(targetBufSamples * (1 - SLIDE_OVERLAP_RATIO));
+        log(`バッファ目標: ${targetBufSamples} smp / スライド幅: ${slideStep} smp`);
 
         processor.onaudioprocess = (e) => {
-            const input = e.inputBuffer.getChannelData(0);
+            const chunk = e.inputBuffer.getChannelData(0);
+
+            // レベルメーター更新（軽量）
             let peak = 0;
-            for (let i = 0; i < input.length; i++) {
-                // 内部処理：音声を32768倍してAIに渡す（これが0%突破の鍵です）
-                sampleBuf.push(input[i] * 32768);
-                if (Math.abs(input[i]) > peak) peak = Math.abs(input[i]);
+            for (let i = 0; i < chunk.length; i++) {
+                const a = Math.abs(chunk[i]);
+                if (a > peak) peak = a;
             }
-            document.getElementById('peakVal').innerText = peak.toFixed(4);
+            $('meter').style.width = Math.min(100, peak * 100 * 3) + '%';
 
-            if (sampleBuf.length >= 16000) {
-                const raw = new Float32Array(sampleBuf.slice(-16000));
-                sampleBuf.splice(0, 4000); 
+            // バッファ蓄積
+            for (let i = 0; i < chunk.length; i++) sampleBuf.push(chunk[i]);
 
-                const res = classifier.classify(raw);
-                const results = res.results || res.classification;
-                
-                if (results) {
-                    // resultsが配列かオブジェクトかに関わらず処理
-                    const items = Array.isArray(results) ? results : Object.keys(results).map(k => ({label: k, value: results[k]}));
-                    
-                    items.forEach(r => {
-                        const label = r.label.toLowerCase();
-                        const val = (r.value * 100).toFixed(1) + '%';
-                        if (label.includes('lock')) {
-                            document.getElementById('bar-lock').style.width = val;
-                            document.getElementById('txt-lock').innerText = val;
-                        } else if (label.includes('noise')) {
-                            document.getElementById('bar-noise').style.width = val;
-                            document.getElementById('txt-noise').innerText = val;
-                        }
-                    });
-                }
+            // 1秒分たまったら推論（推論中は重複しない）
+            if (sampleBuf.length >= targetBufSamples && !isClassifying) {
+                const window = new Float32Array(sampleBuf.slice(0, targetBufSamples));
+                sampleBuf    = sampleBuf.slice(slideStep); // スライド
+
+                // 【Safari Fix 4】
+                // onaudioprocess 内で重い処理をすると
+                // オーディオスレッドが詰まりUIに反映されない
+                // → setTimeout(0) でメインスレッドに委ねる
+                setTimeout(() => runInference(window), 0);
             }
         };
 
-        isRecording = true;
-        document.getElementById('mainBtn').innerText = 'STOP';
-        document.getElementById('mainBtn').className = 'btn stop';
-        draw();
-    } catch (e) { alert(e.message); }
-}
+        source.connect(processor);
+        processor.connect(audioCtx.destination);
 
-function stop() {
-    isRecording = false;
-    if (audioCtx) audioCtx.close();
-    document.getElementById('mainBtn').innerText = 'START';
-    document.getElementById('mainBtn').className = 'btn';
-}
+        isRecording           = true;
+        $('btn').innerText    = '🔴 録音中...';
+        $('btn').classList.add('recording');
+        $('state-display').textContent = '録音中';
+        log("🎤 監視開始（1秒窓 / " + Math.round(SLIDE_OVERLAP_RATIO * 100) + "% オーバーラップ）");
 
-function draw() {
-    if (!isRecording) return;
-    requestAnimationFrame(draw);
-    const canvas = document.getElementById('waveCanvas');
-    const ctx = canvas.getContext('2d');
-    const data = new Float32Array(analyser.fftSize);
-    analyser.getFloatTimeDomainData(data);
-    ctx.fillStyle = '#0f0f1f'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.strokeStyle = '#00ffaa'; ctx.lineWidth = 1.5; ctx.beginPath();
-    const step = canvas.width / data.length;
-    for (let i = 0; i < data.length; i++) {
-        const x = i * step;
-        const y = (data[i] + 1) / 2 * canvas.height;
-        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    } catch (e) {
+        log("❌ 録音エラー: " + e.message, 'err');
+        log(e.stack || '', 'err');
     }
-    ctx.stroke();
+}
+
+// ============================================================
+// 推論実行（メインスレッド側）
+// ============================================================
+async function runInference(rawChunk /* Float32Array @ actualSampleRate */) {
+    isClassifying = true;
+    try {
+        // ① リサンプリング（必要な場合）
+        const resampled = resample(rawChunk, actualSampleRate, MODEL_SAMPLE_RATE);
+
+        const maxVal = Math.max(...resampled.map(Math.abs));
+        log(`推論開始 [${resampled.length} smp, peak=${maxVal.toFixed(4)}]`);
+
+        if (maxVal < 0.001) {
+            log("⚠️ 入力がほぼ無音 — マイク入力を確認してください", 'warn');
+        }
+
+        // ② classify() を呼ぶ
+        //    Edge Impulse WASM は Float32Array (-1〜1) を受け付ける
+        //    それでも 0% が続く場合は Int16 に変換して渡す（下の代替パスを有効化）
+        let res;
+        try {
+            res = classifier.classify(resampled);
+        } catch (e1) {
+            log("Float32で失敗 → Int16に変換して再試行: " + e1.message, 'warn');
+            const int16 = float32ToInt16(resampled);
+            res = classifier.classify(int16);
+        }
+
+        // ③ 結果パース（SDK バージョンにより構造が異なる）
+        log("RAW結果: " + JSON.stringify(res), 'result');
+
+        const results =
+            res?.results          ??  // 新SDK: { results: [{label, value}] }
+            res?.classification   ??  // 旧SDK: { classification: {LOCK:0.9,...} }
+            null;
+
+        if (Array.isArray(results)) {
+            // 新SDK形式
+            results.forEach(r => {
+                const bar = '█'.repeat(Math.round(r.value * 20));
+                log(`  ${r.label.padEnd(10)} ${(r.value * 100).toFixed(1).padStart(5)}% ${bar}`, 'result');
+            });
+        } else if (results && typeof results === 'object') {
+            // 旧SDK形式（オブジェクト）
+            Object.entries(results).forEach(([label, value]) => {
+                const bar = '█'.repeat(Math.round(value * 20));
+                log(`  ${label.padEnd(10)} ${(value * 100).toFixed(1).padStart(5)}% ${bar}`, 'result');
+            });
+        } else {
+            log("⚠️ 結果形式が不明: " + JSON.stringify(res), 'warn');
+        }
+
+        $('state-display').textContent = '推論完了';
+
+    } catch (e) {
+        log("❌ 推論エラー: " + e.message, 'err');
+        log(e.stack || '', 'err');
+    } finally {
+        isClassifying = false;
+    }
 }
 </script>
 </body>
